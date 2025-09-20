@@ -1,0 +1,477 @@
+import React, { useState, useMemo, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { useCardTextSelection, SelectionPayload } from '@/hooks/useCardTextSelection';
+
+const nodeTypeConfig = {
+  root_question: {
+    icon: MessageCircle,
+    title: 'Root Question'
+  },
+  ai_answer: {
+    icon: Sparkles,
+    title: 'AI Response'
+  },
+  followup_question: {
+    icon: MessageCircle,
+    title: 'Follow-up Question'
+  },
+  followup_answer: {
+    icon: Sparkles,
+    title: 'Follow-up Response'
+  }
+};
+
+// Color palette for different root questions
+const rootQuestionColors = [
+  {
+    bg: 'bg-gradient-to-br from-blue-50 to-indigo-50',
+    border: 'border-blue-200',
+    iconColor: 'text-blue-600',
+    accent: 'blue'
+  },
+  {
+    bg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+    border: 'border-purple-200',
+    iconColor: 'text-purple-600',
+    accent: 'purple'
+  },
+  {
+    bg: 'bg-gradient-to-br from-green-50 to-emerald-50',
+    border: 'border-green-200',
+    iconColor: 'text-green-600',
+    accent: 'green'
+  },
+  {
+    bg: 'bg-gradient-to-br from-amber-50 to-orange-50',
+    border: 'border-amber-200',
+    iconColor: 'text-amber-600',
+    accent: 'amber'
+  },
+  {
+    bg: 'bg-gradient-to-br from-rose-50 to-pink-50',
+    border: 'border-rose-200',
+    iconColor: 'text-rose-600',
+    accent: 'rose'
+  },
+  {
+    bg: 'bg-gradient-to-br from-cyan-50 to-blue-50',
+    border: 'border-cyan-200',
+    iconColor: 'text-cyan-600',
+    accent: 'cyan'
+  }
+];
+
+interface CanvasNodeProps {
+  node: {
+    id: string;
+    type: string;
+    content: string;
+    parent_id?: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  onAddFollowup: (nodeId: string, question: string) => void;
+  onAskAboutText: (nodeId: string, selectedText: string, question: string) => void;
+  isGenerating: boolean;
+  onMouseDown?: (e: React.MouseEvent) => void;
+  isDragging?: boolean;
+  rootQuestionIndex?: number;
+  allNodes?: any[]; // Array of all nodes to find parent question
+  textToQuestionLinks?: Array<{
+    sourceNodeId: string;
+    targetNodeId: string;
+    selectedText: string;
+  }>;
+}
+
+export default function CanvasNode({ 
+  node, 
+  onAddFollowup, 
+  onAskAboutText,
+  isGenerating,
+  onMouseDown,
+  isDragging,
+  rootQuestionIndex = 0,
+  allNodes = [],
+  textToQuestionLinks = []
+}: CanvasNodeProps) {
+  const [showFollowupInput, setShowFollowupInput] = useState(false);
+  const [followupText, setFollowupText] = useState('');
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [showAskAIInput, setShowAskAIInput] = useState(false);
+  const [askAIQuestion, setAskAIQuestion] = useState('');
+  
+  // Refs for text selection
+  const cardRef = useRef<HTMLDivElement>(null);
+  const questionRef = useRef<HTMLDivElement>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
+  
+  // Text selection hook
+  const { 
+    activeCardId, 
+    isSelecting, 
+    handleCardMouseDown, 
+    handleCardMouseUp, 
+    getCardSelectionPayload,
+    resetSelection
+  } = useCardTextSelection();
+  
+  // Don't render standalone AI answers - they'll be shown inline with root questions
+  if (node.type === 'ai_answer' || node.type === 'followup_answer') {
+    return null;
+  }
+  
+  // Find parent question for AI answer nodes
+  const parentQuestion = useMemo(() => {
+    if ((node.type === 'ai_answer' || node.type === 'followup_answer') && node.parent_id && allNodes.length > 0) {
+      const parentNode = allNodes.find(n => n.id === node.parent_id);
+      return parentNode?.content || 'Unknown Question';
+    }
+    return null;
+  }, [node.type, node.parent_id, allNodes]);
+
+  // Find linked texts for this node
+  const linkedTexts = useMemo(() => {
+    return textToQuestionLinks.filter(link => link.sourceNodeId === node.id);
+  }, [textToQuestionLinks, node.id]);
+
+  const aiAnswer = useMemo(() => {
+    if ((node.type === 'root_question' || node.type === 'followup_question') && allNodes.length > 0) {
+      const answerType = node.type === 'root_question' ? 'ai_answer' : 'followup_answer';
+      const answer = allNodes.find(n => n.parent_id === node.id && n.type === answerType);
+      return answer?.content || null;
+    }
+    return null;
+  }, [node.type, node.id, allNodes]);
+  
+  const typeConfig = nodeTypeConfig[node.type as keyof typeof nodeTypeConfig];
+  const colorConfig = rootQuestionColors[rootQuestionIndex % rootQuestionColors.length];
+  const Icon = typeConfig.icon;
+
+  const handleAskAboutSelectedText = (selectedText: string, customQuestion: string) => {
+    // For questions with AI answers, add followup to the AI answer node instead
+    const targetNodeId = ((node.type === 'root_question' || node.type === 'followup_question') && aiAnswer) 
+      ? allNodes.find(n => n.parent_id === node.id && (n.type === 'ai_answer' || n.type === 'followup_answer'))?.id || node.id
+      : node.id;
+    
+    onAskAboutText(targetNodeId, selectedText, customQuestion);
+    resetSelection();
+    setShowAskAIInput(false);
+    setAskAIQuestion('');
+  };
+
+  const handleAskAIClick = () => {
+    // Get selection payload for the AI answer area
+    const payload = getCardSelectionPayload(answerRef, node.id, 'answer');
+    if (payload && payload.text_md) {
+      if (askAIQuestion.trim()) {
+        handleAskAboutSelectedText(payload.text_md, askAIQuestion);
+      } else {
+        setShowAskAIInput(true);
+      }
+    }
+  };
+
+  const handleCardMouseDownEvent = (e: React.MouseEvent) => {
+    // Only handle if clicking on selectable content, not buttons or controls
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('[data-drag-handle]')) {
+      return;
+    }
+    
+    handleCardMouseDown(node.id);
+  };
+
+  const handleAddFollowup = () => {
+    if (followupText.trim()) {
+      // For questions with AI answers, add followup to the AI answer node instead
+      const targetNodeId = ((node.type === 'root_question' || node.type === 'followup_question') && aiAnswer) 
+        ? allNodes.find(n => n.parent_id === node.id && (n.type === 'ai_answer' || n.type === 'followup_answer'))?.id || node.id
+        : node.id;
+      
+      onAddFollowup(targetNodeId, followupText.trim());
+      setFollowupText('');
+      setShowFollowupInput(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddFollowup();
+    }
+  };
+
+  const stopPropagation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onMouseDown && typeof onMouseDown === 'function') {
+      onMouseDown(e);
+    }
+  };
+
+  const shouldShowContent = node.content.length > 100;
+
+  return (
+    <motion.div
+      className="absolute"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+    >
+      <Card 
+        ref={cardRef}
+        className={`
+          qa-card ${colorConfig.bg} ${colorConfig.border} border-2 shadow-lg hover:shadow-xl 
+          transition-all duration-300
+          ${isDragging ? 'shadow-2xl scale-105 cursor-grabbing' : 'cursor-pointer'}
+          ${activeCardId === node.id ? 'qa-card--active' : ''}
+          overflow-hidden relative isolate
+        `}
+        style={{ 
+          width: node.width, 
+          minHeight: isExpanded ? (aiAnswer ? 'auto' : node.height) : 80,
+          height: aiAnswer && isExpanded ? 'auto' : undefined,
+        }}
+        onMouseDown={handleCardMouseDownEvent}
+        onMouseUp={handleCardMouseUp}
+        data-node-id={node.id}
+      >
+        {/* Drag Handle */}
+        <div 
+          className="absolute top-2 right-2 opacity-40 hover:opacity-80 cursor-grab active:cursor-grabbing transition-opacity z-10 p-1 rounded"
+          onMouseDown={handleDragStart}
+          data-drag-handle
+        >
+          <GripVertical className="w-4 h-4 text-gray-600" />
+        </div>
+
+        <div className="p-4 h-full flex flex-col" onClick={stopPropagation}>
+          {/* Header */}
+          <div className="flex items-start gap-3 mb-3 flex-shrink-0">
+            <div className={`p-2 rounded-full ${colorConfig.bg} ${colorConfig.border} border flex-shrink-0`}>
+              <Icon className={`w-4 h-4 ${colorConfig.iconColor}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {typeConfig.title}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-1 hover:bg-gray-100/50"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? 
+                    <ChevronUp className="w-3 h-3" /> : 
+                    <ChevronDown className="w-3 h-3" />
+                  }
+                </Button>
+              </div>
+              {/* Show parent question as accordion heading for AI answers */}
+              {parentQuestion && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-gray-600 mb-1">Question:</p>
+                  <p className="text-sm text-gray-800 leading-relaxed select-text">
+                    {parentQuestion.length > 80 ? `${parentQuestion.substring(0, 80)}...` : parentQuestion}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Content - Show question and AI answer for root questions */}
+          {isExpanded ? (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 min-h-0 mb-3 space-y-4"
+            >
+              {/* Question Content */}
+              <div ref={questionRef}>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Question:</h3>
+                <div className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap" data-selectable>
+                  {node.content}
+                </div>
+              </div>
+              
+              {/* AI Answer Content (for root questions) */}
+              {aiAnswer && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-green-700 mb-2 flex items-center">
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    AI Response:
+                  </h3>
+                  <div 
+                    ref={answerRef}
+                    className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate"
+                    data-selectable
+                  >
+                    {aiAnswer}
+                  </div>
+                  {/* Show linked text indicators if any */}
+                  {linkedTexts.length > 0 && (
+                    <div className="mt-2 text-xs text-blue-600">
+                      💡 Some text above has spawned follow-up questions
+                    </div>
+                  )}
+                  
+                  {/* Ask AI about selected text button */}
+                  {showAskAIInput ? (
+                    <div className="mt-3 space-y-2">
+                      <Textarea
+                        value={askAIQuestion}
+                        onChange={(e) => setAskAIQuestion(e.target.value)}
+                        placeholder="What would you like to ask about the selected text?"
+                        className="text-xs resize-none border-2 focus:ring-2 focus:ring-blue-500/20"
+                        rows={2}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleAskAIClick}
+                          disabled={!askAIQuestion.trim() || isGenerating}
+                          className="text-white text-xs flex-1 bg-blue-600 hover:bg-blue-700"
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              Asking...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3 h-3 mr-1" />
+                              Ask AI
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowAskAIInput(false);
+                            setAskAIQuestion('');
+                          }}
+                          disabled={isGenerating}
+                          className="text-xs"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full border-dashed hover:bg-green-50 transition-colors text-xs"
+                      onClick={handleAskAIClick}
+                      disabled={isGenerating}
+                    >
+                      <MessageCircle className="w-3 h-3 mr-1" />
+                      Ask AI about text
+                    </Button>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            // Show preview when collapsed
+            <div className="flex-shrink-0 mb-3">
+              <div className="text-sm leading-relaxed text-gray-800 select-none">
+                {node.content.length > 100 
+                  ? `${node.content.substring(0, 100)}...`
+                  : node.content
+                }
+              </div>
+              {aiAnswer && (
+                <div className="mt-2 text-xs text-green-700">
+                  + AI Response available (expand to view)
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Follow-up Section */}
+          <div className="flex-shrink-0">
+            {!showFollowupInput ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full border-dashed hover:bg-gray-50 transition-colors text-xs"
+                onClick={() => setShowFollowupInput(true)}
+                disabled={isGenerating}
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Ask Follow-up
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <Textarea
+                  value={followupText}
+                  onChange={(e) => setFollowupText(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="What would you like to explore further?"
+                  className="text-xs resize-none border-2 focus:ring-2 focus:ring-blue-500/20"
+                  rows={2}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleAddFollowup}
+                    disabled={!followupText.trim() || isGenerating}
+                    className={`text-white text-xs flex-1 ${
+                      colorConfig.accent === 'blue' ? 'bg-blue-600 hover:bg-blue-700' :
+                      colorConfig.accent === 'purple' ? 'bg-purple-600 hover:bg-purple-700' :
+                      colorConfig.accent === 'green' ? 'bg-green-600 hover:bg-green-700' :
+                      colorConfig.accent === 'amber' ? 'bg-amber-600 hover:bg-amber-700' :
+                      colorConfig.accent === 'rose' ? 'bg-rose-600 hover:bg-rose-700' :
+                      'bg-cyan-600 hover:bg-cyan-700'
+                    }`}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Asking...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3 h-3 mr-1" />
+                        Ask AI
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowFollowupInput(false);
+                      setFollowupText('');
+                    }}
+                    disabled={isGenerating}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
