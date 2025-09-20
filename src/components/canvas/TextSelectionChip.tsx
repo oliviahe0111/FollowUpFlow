@@ -16,6 +16,7 @@ export function TextSelectionChip({ rect, onClick }: TextSelectionChipProps) {
   return createPortal(
     <div
       className="fixed z-50 pointer-events-none"
+      data-selection-ui="true"
       style={{
         left: `${left}px`,
         top: `${top}px`,
@@ -23,7 +24,17 @@ export function TextSelectionChip({ rect, onClick }: TextSelectionChipProps) {
     >
       <Button
         size="sm"
-        onClick={onClick}
+        onMouseDown={(e) => {
+          console.log('🎈 TextSelectionChip onMouseDown - preventing default');
+          e.preventDefault(); // Prevent selection from being cleared
+        }}
+        onClick={(e) => {
+          console.log('🎈 TextSelectionChip onClick - calling onClick handler');
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        }}
+        data-selection-ui="true"
         className="pointer-events-auto bg-blue-600 hover:bg-blue-700 text-white shadow-lg border border-blue-500 text-xs px-3 py-1 h-auto"
       >
         <MessageCircle className="w-3 h-3 mr-1" />

@@ -14,6 +14,7 @@ import StartModal from '@/components/canvas/StartModal';
 import BoardList from '@/components/BoardList';
 import { useAnswerTextSelection } from '@/hooks/useAnswerTextSelection';
 import { TextSelectionChip } from '@/components/canvas/TextSelectionChip';
+import TextSelectionPopup from '@/components/canvas/TextSelectionPopup';
 
 // Rate limit retry utility - moved outside the component to ensure stability
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
@@ -42,6 +43,7 @@ export default function BrainstormPage() {
   const [generatingNodeId, setGeneratingNodeId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSelectionPopup, setShowSelectionPopup] = useState(false);
 
   // Canvas state
   const [zoom, setZoom] = useState(1);
@@ -56,12 +58,24 @@ export default function BrainstormPage() {
   const [nextRootIndex, setNextRootIndex] = useState(0);
 
   // Text selection hook for AI answers
-  const { selection, clear: clearSelection } = useAnswerTextSelection();
+  const { selection, snapshotSelection, clear: clearSelection, suppressClearTemporarily } = useAnswerTextSelection();
 
   // Debug selection changes
   useEffect(() => {
-    console.log('🎈 Selection changed:', selection);
-  }, [selection]);
+    console.log('🎈 Selection changed:', selection ? selection.text.slice(0, 50) : 'null');
+    // Only close popup if selection is cleared AND we don't have a snapshot to preserve popup data
+    if (!selection && !snapshotSelection) {
+      console.log('🎈 Selection and snapshot cleared - closing popup (showSelectionPopup was:', showSelectionPopup, ')');
+      setShowSelectionPopup(false);
+    } else if (!selection && snapshotSelection) {
+      console.log('🎈 Selection cleared but snapshot preserved - keeping popup open');
+    }
+  }, [selection, snapshotSelection, showSelectionPopup]);
+
+  // Debug popup state changes
+  useEffect(() => {
+    console.log('🎈 showSelectionPopup state changed to:', showSelectionPopup, 'at timestamp:', Date.now());
+  }, [showSelectionPopup]);
 
   // calculateNewNodePosition does not depend on any state directly, only its arguments
   const calculateNewNodePosition = useCallback((parentNodeId: string, allNodes: any[]) => {
@@ -735,11 +749,56 @@ export default function BrainstormPage() {
         <TextSelectionChip
           rect={selection.rect}
           onClick={() => {
-            console.log('🎈 Chip clicked! Selection:', selection);
-            // TODO: Open popup
+            console.log('🎈 Chip clicked! Current state:', {
+              selection: selection.text.slice(0, 50),
+              showSelectionPopup,
+              timestamp: Date.now()
+            });
+            console.log('🎈 Setting showSelectionPopup to true and suppressing clears');
+            suppressClearTemporarily(); // Prevent selection clearing for 200ms
+            setShowSelectionPopup(true);
           }}
         />
       )}
+
+      {/* Text Selection Popup */}
+      {(() => {
+        // Use snapshotSelection for popup data - this persists even if current selection is cleared
+        const popupData = snapshotSelection;
+        const shouldShowPopup = popupData && showSelectionPopup;
+        console.log('🎈 Popup render check:', {
+          hasSnapshot: !!popupData,
+          snapshotText: popupData?.text.slice(0, 50),
+          showSelectionPopup,
+          shouldShowPopup,
+          reason: !popupData ? 'no snapshot' : !showSelectionPopup ? 'showSelectionPopup false' : 'should show'
+        });
+        
+        return shouldShowPopup ? (
+          <TextSelectionPopup
+            selectedText={popupData.text}
+            position={{ x: popupData.rect.right + 12, y: popupData.rect.top - 12 }}
+            onAskAI={(selectedText, customQuestion) => {
+              console.log('📝 Popup onAskAI called:', { selectedText, customQuestion, cardNodeId: popupData.cardNodeId });
+              
+              // Create a contextual question that includes the selected text
+              const contextualQuestion = `Based on this selected text: "${selectedText}"\n\nQuestion: ${customQuestion}`;
+              
+              // Use the existing handleAddFollowup with the card node ID
+              handleAddFollowup(popupData.cardNodeId, contextualQuestion);
+              
+              // Close the popup and clear the selection
+              setShowSelectionPopup(false);
+              clearSelection();
+            }}
+            onClose={() => {
+              console.log('❌ Popup closed via onClose');
+              setShowSelectionPopup(false);
+            }}
+            isVisible={showSelectionPopup}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }

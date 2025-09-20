@@ -8,33 +8,54 @@ interface TextSelection {
 
 export function useAnswerTextSelection() {
   const [selection, setSelection] = useState<TextSelection | null>(null);
+  const [snapshotSelection, setSnapshotSelection] = useState<TextSelection | null>(null);
+  const [suppressClearUntil, setSuppressClearUntil] = useState<number>(0);
 
   const clear = useCallback(() => {
     setSelection(null);
+    setSnapshotSelection(null);
     if (window.getSelection) {
       window.getSelection()?.removeAllRanges();
     }
   }, []);
 
+  // Function to suppress selection clearing for a short window (e.g., after chip click)
+  const suppressClearTemporarily = useCallback(() => {
+    const suppressUntil = Date.now() + 200; // 200ms suppress window
+    setSuppressClearUntil(suppressUntil);
+    console.log('🔒 Suppressing selection clears until:', suppressUntil);
+  }, []);
+
   useEffect(() => {
     const handleSelectionChange = () => {
-      console.log('🔍 Selection change detected');
       const windowSelection = window.getSelection();
+      const selectedText = windowSelection?.toString().trim() || '';
+      const now = Date.now();
+      const isInSuppressWindow = now < suppressClearUntil;
       
-      // Early return on empty selections
+      console.log('🔍 Selection change detected - text length:', selectedText.length, 'current stored selection:', !!selection, 'suppress window active:', isInSuppressWindow);
+      
+      // Early return on empty selections, but respect suppress window
       if (!windowSelection || windowSelection.rangeCount === 0) {
-        console.log('❌ No selection or no ranges');
+        if (isInSuppressWindow) {
+          console.log('🔒 Ignoring empty selection due to suppress window');
+          return;
+        }
+        console.log('❌ No selection or no ranges - clearing stored selection');
         setSelection(null);
         return;
       }
 
       const range = windowSelection.getRangeAt(0);
-      const selectedText = windowSelection.toString().trim();
-      console.log('📝 Selected text:', selectedText);
+      console.log('📝 Selected text length:', selectedText.length, 'text preview:', selectedText.slice(0, 30));
       
-      // Early return on empty text
+      // Early return on empty text, but respect suppress window
       if (!selectedText) {
-        console.log('❌ Empty selected text');
+        if (isInSuppressWindow) {
+          console.log('🔒 Ignoring empty text selection due to suppress window');
+          return;
+        }
+        console.log('❌ Empty selected text - clearing stored selection');
         setSelection(null);
         return;
       }
@@ -52,8 +73,9 @@ export function useAnswerTextSelection() {
       console.log('🔍 Starting element search from:', currentElement);
       
       while (currentElement && currentElement !== document.body) {
-        console.log('🔍 Checking element:', currentElement, 'data-ai-response:', currentElement.getAttribute?.('data-ai-response'));
-        if (currentElement.getAttribute?.('data-ai-response') === 'true') {
+        const isAiResponse = currentElement.getAttribute?.('data-ai-response') === 'true';
+        console.log('🔍 Checking element:', currentElement.tagName, 'data-ai-response:', isAiResponse);
+        if (isAiResponse) {
           aiResponseContainer = currentElement;
           console.log('✅ Found AI response container:', aiResponseContainer);
           break;
@@ -63,7 +85,7 @@ export function useAnswerTextSelection() {
 
       // Early return if not inside an AI response container
       if (!aiResponseContainer) {
-        console.log('❌ Not inside AI response container');
+        console.log('❌ Not inside AI response container - clearing stored selection');
         setSelection(null);
         return;
       }
@@ -98,11 +120,13 @@ export function useAnswerTextSelection() {
 
       // Set the valid selection
       console.log('✅ Setting valid selection:', { text: selectedText, cardNodeId });
-      setSelection({
+      const newSelection = {
         text: selectedText,
         rect: rangeRect,
         cardNodeId
-      });
+      };
+      setSelection(newSelection);
+      setSnapshotSelection(newSelection); // Always snapshot valid selections
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -112,5 +136,5 @@ export function useAnswerTextSelection() {
     };
   }, []);
 
-  return { selection, clear };
+  return { selection, snapshotSelection, clear, suppressClearTemporarily };
 }
