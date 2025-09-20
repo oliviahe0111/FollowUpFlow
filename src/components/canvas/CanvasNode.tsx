@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const nodeTypeConfig = {
   root_question: { icon: MessageCircle, title: 'Root Question' },
@@ -87,6 +87,7 @@ export default function CanvasNode({
   // Drag start (for moving the card on the canvas)
   const handleDragStart = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault(); // Prevent text selection during drag
     onMouseDown?.(e);
   };
 
@@ -128,7 +129,7 @@ export default function CanvasNode({
         className={`
           qa-card ${colorConfig.bg} ${colorConfig.border} border-2 shadow-lg hover:shadow-xl 
           transition-all duration-300
-          ${isDragging ? 'shadow-2xl scale-105 cursor-grabbing' : 'cursor-pointer'}
+          ${isDragging ? 'shadow-2xl scale-105 cursor-grabbing' : 'cursor-grab'}
           overflow-hidden relative isolate
         `}
         style={{
@@ -137,19 +138,14 @@ export default function CanvasNode({
           height: aiAnswer && isExpanded ? 'auto' : undefined
         }}
         data-node-id={node.id}
+        onMouseDown={handleDragStart}
       >
-        {/* Drag Handle */}
-        <div
-          className="absolute top-2 right-2 opacity-40 hover:opacity-80 cursor-grab active:cursor-grabbing transition-opacity z-10 p-1 rounded"
-          onMouseDown={handleDragStart}
-          data-drag-handle
-        >
-          <GripVertical className="w-4 h-4 text-gray-600" />
-        </div>
-
         <div className="p-4 h-full flex flex-col" onClick={stopPropagation}>
-          {/* Header */}
-          <div className="flex items-start gap-3 mb-3 flex-shrink-0">
+          {/* Header - Also draggable, except for expand/collapse button */}
+          <div 
+            className="flex items-start gap-3 mb-3 flex-shrink-0 cursor-grab active:cursor-grabbing"
+            onMouseDown={handleDragStart}
+          >
             <div className={`p-2 rounded-full ${colorConfig.bg} ${colorConfig.border} border flex-shrink-0`}>
               <Icon className={`w-4 h-4 ${colorConfig.iconColor}`} />
             </div>
@@ -161,8 +157,9 @@ export default function CanvasNode({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-auto p-1 hover:bg-gray-100/50"
+                  className="h-auto p-1 hover:bg-gray-100/50 text-gray-700 hover:text-gray-900"
                   onClick={() => setIsExpanded(!isExpanded)}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
                   {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </Button>
@@ -199,7 +196,7 @@ export default function CanvasNode({
 
               {/* Inline AI Answer (if present) */}
               {aiAnswer && (
-                <div className="border-t pt-4">
+                <div className="border-t pt-4" onMouseDown={(e) => e.stopPropagation()}>
                   <h3 className="text-sm font-medium text-green-700 mb-2 flex items-center">
                     <Sparkles className="w-4 h-4 mr-1" />
                     AI Response:
@@ -207,7 +204,7 @@ export default function CanvasNode({
                   <div 
                     data-ai-response="true"
                     data-node-id={node.id}
-                    className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate"
+                    className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate cursor-text"
                   >
                     {aiAnswer}
                   </div>
@@ -225,12 +222,12 @@ export default function CanvasNode({
           )}
 
           {/* Follow-up Section (generic, no selection) */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
             {!showFollowupInput ? (
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full border-dashed hover:bg-gray-50 transition-colors text-xs"
+                className="w-full border-dashed hover:bg-gray-50 transition-colors text-xs text-gray-900 border-gray-400 hover:border-gray-600"
                 onClick={() => setShowFollowupInput(true)}
                 disabled={isGenerating}
               >
@@ -244,7 +241,7 @@ export default function CanvasNode({
                   onChange={(e) => setFollowupText(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="What would you like to explore further?"
-                  className="text-xs resize-none border-2 focus:ring-2 focus:ring-blue-500/20"
+                  className="border border-gray-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 resize-none text-gray-900 placeholder:text-gray-500"
                   rows={2}
                   autoFocus
                 />
@@ -287,7 +284,7 @@ export default function CanvasNode({
                       setFollowupText('');
                     }}
                     disabled={isGenerating}
-                    className="text-xs"
+                    className="w-full hover:bg-gray-50 transition-colors text-xs text-gray-900 border-gray-400 hover:border-gray-600"
                   >
                     Cancel
                   </Button>
