@@ -92,7 +92,7 @@ export default function TextSelectionPopup({
             className="h-auto p-1 hover:bg-gray-100"
             onClick={onClose}
           >
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3 text-gray-900" />
           </Button>
         </div>
         
@@ -113,7 +113,7 @@ export default function TextSelectionPopup({
             onChange={(e) => setCustomQuestion(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="What would you like to ask about this text?"
-            className="text-sm resize-none border-2 focus:ring-2 focus:ring-blue-500/20"
+            className="border border-gray-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 resize-none text-gray-900 placeholder:text-gray-500"
             rows={3}
           />
         </div>
@@ -133,7 +133,7 @@ export default function TextSelectionPopup({
             variant="outline"
             size="sm"
             onClick={onClose}
-            className="text-sm"
+            className="text-sm text-gray-900 font-semibold"
           >
             Cancel
           </Button>
