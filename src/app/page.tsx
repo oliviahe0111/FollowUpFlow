@@ -146,13 +146,78 @@ export default function BrainstormPage() {
     initializeApp();
   }, [loadBoard]);
 
+  // Build contextual prompt with conversation history
+  const buildContextualPrompt = (parentNodeId: string, question: string, currentNodes: any[], rootId: string): string => {
+    let context = "";
+    
+    // Find the root question for overall context
+    const rootNode = currentNodes.find(n => n.id === rootId);
+    if (rootNode) {
+      context += `Original Topic: ${rootNode.content}\n\n`;
+    }
+    
+    // Find the parent node to understand what we're following up on
+    const parentNode = currentNodes.find(n => n.id === parentNodeId);
+    if (parentNode) {
+      if (parentNode.type === 'ai_answer' || parentNode.type === 'followup_answer') {
+        // Following up on an AI response
+        context += `Previous AI Response: ${parentNode.content}\n\n`;
+        
+        // Find the question that led to this answer
+        const parentQuestion = currentNodes.find(n => n.id === parentNode.parent_id);
+        if (parentQuestion) {
+          context += `Previous Question: ${parentQuestion.content}\n\n`;
+        }
+      } else {
+        // Following up on a question
+        context += `Previous Question: ${parentNode.content}\n\n`;
+        
+        // Find the AI answer to that question
+        const aiAnswer = currentNodes.find(n => n.parent_id === parentNode.id && (n.type === 'ai_answer' || n.type === 'followup_answer'));
+        if (aiAnswer) {
+          context += `Previous AI Response: ${aiAnswer.content}\n\n`;
+        }
+      }
+    }
+    
+    // Build conversation thread by walking up the parent chain
+    const conversationChain = [];
+    let currentNodeId = parentNodeId;
+    let depth = 0;
+    const maxDepth = 3; // Limit context to avoid very long prompts
+    
+    while (currentNodeId && depth < maxDepth) {
+      const node = currentNodes.find(n => n.id === currentNodeId);
+      if (!node || node.id === rootId) break;
+      
+      if (node.type === 'root_question' || node.type === 'followup_question') {
+        conversationChain.unshift(`Q: ${node.content}`);
+      } else if (node.type === 'ai_answer' || node.type === 'followup_answer') {
+        conversationChain.unshift(`A: ${node.content.substring(0, 200)}${node.content.length > 200 ? '...' : ''}`);
+      }
+      
+      currentNodeId = node.parent_id;
+      depth++;
+    }
+    
+    if (conversationChain.length > 0) {
+      context += `Recent Conversation:\n${conversationChain.join('\n')}\n\n`;
+    }
+    
+    return `${context}New Question: ${question}\n\nProvide a thoughtful, detailed response that builds on this conversation context. Be insightful and offer specific, actionable ideas.`;
+  };
+
   const generateAIResponse = useCallback(async (parentNodeId: string, question: string, boardId: string, rootId: string, currentNodes: any[]) => {
     setIsGenerating(true);
     setGeneratingNodeId(parentNodeId);
     setError(null);
 
     try {
-      const fullPrompt = `Context from this brainstorming session.\n\nNew Question: ${question}\n\nProvide a thoughtful, detailed response that builds on the conversation context. Be insightful and offer specific, actionable ideas.`;
+      // Build contextual prompt with conversation history
+      const fullPrompt = buildContextualPrompt(parentNodeId, question, currentNodes, rootId);
+      
+      // Log the full prompt being sent to the LLM
+      console.log('🤖 LLM Prompt:', fullPrompt);
 
       const response = await InvokeLLM({
         prompt: fullPrompt,
@@ -313,6 +378,13 @@ export default function BrainstormPage() {
   const handleAddFollowup = useCallback(async (parentNodeId: string, followupQuestion: string) => {
     if (!currentBoard) return;
     setError(null);
+
+    // Log the follow-up question being processed
+    console.log('🔗 Processing follow-up question:', {
+      parentNodeId,
+      question: followupQuestion,
+      timestamp: new Date().toISOString()
+    });
 
     try {
       const parentNode = nodes.find((n: any) => n.id === parentNodeId);
