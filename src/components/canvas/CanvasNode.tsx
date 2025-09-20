@@ -204,7 +204,11 @@ export default function CanvasNode({
                     <Sparkles className="w-4 h-4 mr-1" />
                     AI Response:
                   </h3>
-                  <div className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate">
+                  <div 
+                    data-ai-response="true"
+                    data-node-id={node.id}
+                    className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate"
+                  >
                     {aiAnswer}
                   </div>
                 </div>

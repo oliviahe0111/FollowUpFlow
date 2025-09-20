@@ -12,6 +12,8 @@ import CanvasNode from '@/components/canvas/CanvasNode';
 import CanvasControls from '@/components/canvas/CanvasControls';
 import StartModal from '@/components/canvas/StartModal';
 import BoardList from '@/components/BoardList';
+import { useAnswerTextSelection } from '@/hooks/useAnswerTextSelection';
+import { TextSelectionChip } from '@/components/canvas/TextSelectionChip';
 
 // Rate limit retry utility - moved outside the component to ensure stability
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
@@ -52,6 +54,14 @@ export default function BrainstormPage() {
   // Color coding state for root questions
   const [rootQuestionOrder, setRootQuestionOrder] = useState<Record<string, number>>({});
   const [nextRootIndex, setNextRootIndex] = useState(0);
+
+  // Text selection hook for AI answers
+  const { selection, clear: clearSelection } = useAnswerTextSelection();
+
+  // Debug selection changes
+  useEffect(() => {
+    console.log('🎈 Selection changed:', selection);
+  }, [selection]);
 
   // calculateNewNodePosition does not depend on any state directly, only its arguments
   const calculateNewNodePosition = useCallback((parentNodeId: string, allNodes: any[]) => {
@@ -128,7 +138,6 @@ export default function BrainstormPage() {
     setError(null);
 
     try {
-      // Minimal context (selection-related context removed)
       const fullPrompt = `Context from this brainstorming session.\n\nNew Question: ${question}\n\nProvide a thoughtful, detailed response that builds on the conversation context. Be insightful and offer specific, actionable ideas.`;
 
       const response = await InvokeLLM({
@@ -674,7 +683,6 @@ export default function BrainstormPage() {
                 <CanvasNode
                   node={node}
                   onAddFollowup={handleAddFollowup}
-                  onAskAboutText={() => {}}    
                   isGenerating={generatingNodeId === node.id}
                   isDragging={draggedNode === node.id}
                   onMouseDown={handleNodeMouseDown}
@@ -721,6 +729,17 @@ export default function BrainstormPage() {
         currentBoard={modalMode === 'add-question' ? currentBoard : null}
         onSelectBoard={handleSelectBoard}
       />
+
+      {/* Text Selection Chip */}
+      {selection && (
+        <TextSelectionChip
+          rect={selection.rect}
+          onClick={() => {
+            console.log('🎈 Chip clicked! Selection:', selection);
+            // TODO: Open popup
+          }}
+        />
+      )}
     </div>
   );
 }

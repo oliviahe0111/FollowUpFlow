@@ -87,6 +87,10 @@ body {
 /* Ensure proper touch handling for canvas */
 .canvas-container {
   touch-action: none;
+}
+
+.canvas-container.is-panning,
+.canvas-container.is-dragging {
   user-select: none;
 }
 
