@@ -110,6 +110,7 @@ export default async function handler(
           return response;
         };
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const response = await Promise.race([apiCall(), timeoutPromise]) as any;
 
         if (isUnexpected(response)) {
@@ -173,6 +174,7 @@ export default async function handler(
 
         return res.status(200).json({ content: content.trim() });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         lastError = error;
         console.log(`Request error (attempt ${attempt + 1}):`, {
@@ -216,6 +218,7 @@ export default async function handler(
       code: 'connection_failed'
     });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     console.error('Unexpected error in LLM API:', {
       message: error.message,

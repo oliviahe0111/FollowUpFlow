@@ -65,7 +65,7 @@ export default async function handler(
 
     if (method === 'POST') {
       // Authenticate user
-      const { user, error: authError } = await authenticateRequest(req, res);
+      const { user } = await authenticateRequest(req, res);
       if (!user) {
         return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
@@ -114,7 +114,7 @@ export default async function handler(
       }
 
       // Authenticate user
-      const { user, error: authError } = await authenticateRequest(req, res);
+      const { user } = await authenticateRequest(req, res);
       if (!user) {
         return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
@@ -136,6 +136,7 @@ export default async function handler(
       }
 
       const body = req.body as UpdateNodeRequest;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = {};
       
       if (body.content !== undefined) data.content = body.content;

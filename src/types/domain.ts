@@ -1,22 +1,29 @@
 // Domain types for the application
 // This file contains shared types to reduce 'any' usage throughout the codebase
 
-export interface Board {
+// Import Prisma DB model types
+import type { Board as PrismaBoard, Node as PrismaNode, Edge as PrismaEdge, NodeType as PrismaNodeType } from '@prisma/client';
+
+// === DB Models (from Prisma) ===
+export type { PrismaBoard, PrismaNode, PrismaEdge, PrismaNodeType };
+
+// === API DTOs (snake_case for responses) ===
+export interface ApiBoard {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   created_at: string;
   updated_at: string;
   owner_id: string;
 }
 
-export interface Node {
+export interface ApiNode {
   id: string;
   board_id: string;
-  type: NodeType;
+  type: PrismaNodeType;
   content: string;
-  root_id?: string | null;
-  parent_id?: string | null;
+  root_id: string | null;
+  parent_id: string | null;
   x: number;
   y: number;
   width: number;
@@ -25,7 +32,7 @@ export interface Node {
   updated_at: string;
 }
 
-export interface Edge {
+export interface ApiEdge {
   id: string;
   board_id: string;
   source_id: string;
@@ -34,7 +41,11 @@ export interface Edge {
   updated_at: string;
 }
 
-export type NodeType = 'root_question' | 'ai_answer' | 'followup_question' | 'followup_answer';
+// Legacy aliases for backward compatibility (will be removed later)
+export type Board = ApiBoard;
+export type Node = ApiNode;
+export type Edge = ApiEdge;
+export type NodeType = PrismaNodeType;
 
 // API Response envelopes
 export interface ApiSuccessResponse<T> {
@@ -54,7 +65,7 @@ export interface CreateBoardRequest {
 
 export interface CreateNodeRequest {
   board_id: string;
-  type: NodeType;
+  type: PrismaNodeType;
   content: string;
   root_id?: string;
   parent_id?: string;
@@ -72,7 +83,7 @@ export interface CreateEdgeRequest {
 
 export interface UpdateNodeRequest {
   content?: string;
-  type?: NodeType;
+  type?: PrismaNodeType;
   root_id?: string;
   parent_id?: string;
   x?: number;
@@ -85,10 +96,10 @@ export interface UpdateNodeRequest {
 export interface CamelCaseNode {
   id: string;
   boardId: string;
-  type: NodeType;
+  type: PrismaNodeType;
   content: string;
-  rootId?: string | null;
-  parentId?: string | null;
+  rootId: string | null;
+  parentId: string | null;
   x: number;
   y: number;
   width: number;
@@ -109,15 +120,15 @@ export interface CamelCaseEdge {
 export interface CamelCaseBoard {
   id: string;
   title: string;
-  description?: string;
+  description: string;
   createdAt: string;
   updatedAt: string;
   ownerId: string;
 }
 
 // Transformation helpers
-export function toSnakeCase<T extends Record<string, any>>(obj: T): any {
-  const result: any = {};
+export function toSnakeCase<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
     result[snakeKey] = value;
@@ -125,8 +136,8 @@ export function toSnakeCase<T extends Record<string, any>>(obj: T): any {
   return result;
 }
 
-export function toCamelCase<T extends Record<string, any>>(obj: T): any {
-  const result: any = {};
+export function toCamelCase<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
     result[camelKey] = value;
@@ -135,7 +146,7 @@ export function toCamelCase<T extends Record<string, any>>(obj: T): any {
 }
 
 // Validation helpers
-export function isValidNodeType(type: string): type is NodeType {
+export function isValidNodeType(type: string): type is PrismaNodeType {
   return ['root_question', 'ai_answer', 'followup_question', 'followup_answer'].includes(type);
 }
 
@@ -147,8 +158,8 @@ export function isValidId(str: string): boolean {
   return uuidRegex.test(str) || cuidRegex.test(str);
 }
 
-// Prisma result transformers
-export function nodeToDTO(node: any): Node {
+// Prisma result transformers (DB models -> API DTOs)
+export function nodeToDTO(node: PrismaNode): ApiNode {
   return {
     id: node.id,
     board_id: node.boardId,
@@ -165,24 +176,24 @@ export function nodeToDTO(node: any): Node {
   };
 }
 
-export function edgeToDTO(edge: any): Edge {
+export function edgeToDTO(edge: PrismaEdge): ApiEdge {
   return {
     id: edge.id,
     board_id: edge.boardId,
     source_id: edge.sourceId,
     target_id: edge.targetId,
     created_at: edge.createdAt.toISOString(),
-    updated_at: edge.updatedAt?.toISOString() || edge.createdAt.toISOString(),
+    updated_at: edge.createdAt.toISOString(), // Edge model only has createdAt
   };
 }
 
-export function boardToDTO(board: any): Board {
+export function boardToDTO(board: PrismaBoard): ApiBoard {
   return {
     id: board.id,
     title: board.title,
     description: board.description || '',
-    owner_id: board.ownerId,
+    owner_id: (board as { ownerId?: string | null }).ownerId || '',
     created_at: board.createdAt.toISOString(),
-    updated_at: board.createdAt.toISOString(), // Use createdAt since updatedAt doesn't exist in schema
+    updated_at: board.createdAt.toISOString(), // Board model only has createdAt
   };
 }

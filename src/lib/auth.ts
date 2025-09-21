@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
-import { isValidId, ApiErrorResponse } from '@/types/domain';
+import { isValidId, ApiErrorResponse, PrismaBoard } from '@/types/domain';
 
 export interface AuthResult {
   user: {
@@ -11,7 +11,8 @@ export interface AuthResult {
   error?: string;
 }
 
-export async function authenticateRequest(req: NextApiRequest, res: NextApiResponse): Promise<AuthResult> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function authenticateRequest(req: NextApiRequest, _res: NextApiResponse): Promise<AuthResult> {
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,7 +55,7 @@ export async function authenticateRequest(req: NextApiRequest, res: NextApiRespo
 export async function authorizeBoardAccess(
   boardId: string, 
   userId: string
-): Promise<{ authorized: boolean; board?: any; error?: string }> {
+): Promise<{ authorized: boolean; board?: PrismaBoard; error?: string }> {
   try {
     if (!isValidId(boardId)) {
       return { authorized: false, error: 'Invalid board ID format' };
@@ -69,7 +70,7 @@ export async function authorizeBoardAccess(
     }
 
     // Type assertion needed due to Prisma schema/DB sync issues
-    const boardWithOwner = board as any;
+    const boardWithOwner = board as PrismaBoard & { ownerId?: string | null };
     if (boardWithOwner.ownerId !== userId) {
       return { authorized: false, error: 'Access denied' };
     }
@@ -78,7 +79,7 @@ export async function authorizeBoardAccess(
   } catch (error) {
     return { 
       authorized: false, 
-      error: error instanceof Error ? error.message : 'Authorization failed' 
+      error: error instanceof Error ? error.message : 'Database error' 
     };
   }
 }
@@ -87,7 +88,7 @@ export function sendAuthError(res: NextApiResponse<ApiErrorResponse>, status: nu
   return res.status(status).json({ error: message, code });
 }
 
-export function extractBoardId(query: any): string | null {
+export function extractBoardId(query: Record<string, string | string[] | undefined>): string | null {
   // Support both board_id and boardId query parameters
   const boardId = query.board_id || query.boardId;
   

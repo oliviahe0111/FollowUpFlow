@@ -22,7 +22,7 @@ model Board {
   description String?
   createdAt   DateTime @default(now())
 
-  ownerId     String?  @db.Uuid
+  ownerId     String   @db.Uuid
 
   nodes       Node[]
   edges       Edge[]

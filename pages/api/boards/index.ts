@@ -34,7 +34,8 @@ export default async function handler(
       const boards = await prisma.board.findMany({
         where: { 
           ownerId: user.id 
-        } as any, // Type assertion until Prisma schema is synced
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
         orderBy: { createdAt: 'desc' }
       });
 
@@ -46,7 +47,7 @@ export default async function handler(
 
     if (method === 'POST') {
       // Authenticate user
-      const { user, error: authError } = await authenticateRequest(req, res);
+      const { user } = await authenticateRequest(req, res);
       if (!user) {
         return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
@@ -62,7 +63,8 @@ export default async function handler(
           title: body.title.trim(),
           description: body.description?.trim() || null,
           ownerId: user.id,
-        } as any, // Type assertion until Prisma schema is synced
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
       });
 
       console.log(`[API] Created board ${board.id} for user ${user.id}`);

@@ -10,6 +10,7 @@ import { Board } from '@/entities/all';
 import type { Board as BoardType } from '@/types/domain';
 
 // Utility function for retry logic
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
   for (let i = 0; i < maxRetries; i++) {
     try {

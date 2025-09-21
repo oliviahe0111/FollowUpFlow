@@ -23,10 +23,12 @@ import { TextSelectionChip } from '@/components/canvas/TextSelectionChip';
 import TextSelectionPopup from '@/components/canvas/TextSelectionPopup';
 
 // Rate limit retry utility - moved outside the component to ensure stability
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.message.includes('Rate limit') && i < maxRetries - 1) {
         console.warn(`Rate limit hit, retrying in ${delay * Math.pow(2, i)}ms...`);
@@ -42,6 +44,7 @@ export default function BrainstormPage() {
   const [currentBoard, setCurrentBoard] = useState<BoardType | null>(null);
   const [showBoardList, setShowBoardList] = useState(true);
   const [nodes, setNodes] = useState<NodeType[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [edges, setEdges] = useState<EdgeType[]>([]);
   const [showStartModal, setShowStartModal] = useState(false);
   const [modalMode, setModalMode] = useState<'new-board' | 'add-question'>('new-board');

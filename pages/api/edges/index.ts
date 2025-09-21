@@ -63,7 +63,7 @@ export default async function handler(
 
     if (method === 'POST') {
       // Authenticate user
-      const { user, error: authError } = await authenticateRequest(req, res);
+      const { user } = await authenticateRequest(req, res);
       if (!user) {
         return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }

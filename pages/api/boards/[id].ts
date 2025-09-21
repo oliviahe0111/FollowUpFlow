@@ -42,7 +42,7 @@ export default async function handler(
       }
 
       // Check ownership - only the owner can delete their board
-      const boardOwnerId = (board as any).ownerId;
+      const boardOwnerId = board.ownerId;
       if (boardOwnerId !== user.id) {
         return sendAuthError(res, 403, 'You can only delete your own boards', 'forbidden');
       }
