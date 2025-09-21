@@ -20,7 +20,7 @@ export async function InvokeLLM(params: {
     }
 
     const data = await response.json();
-    return data.text;
+    return data.content;
   } catch (error) {
     console.error('Error invoking LLM:', error);
     throw error;
