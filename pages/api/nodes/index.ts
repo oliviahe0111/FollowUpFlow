@@ -1,73 +1,173 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
+import { 
+  Node, 
+  ApiSuccessResponse, 
+  ApiErrorResponse, 
+  CreateNodeRequest,
+  UpdateNodeRequest,
+  nodeToDTO,
+  isValidNodeType
+} from '@/types/domain';
+import { 
+  authenticateRequest, 
+  authorizeBoardAccess, 
+  sendAuthError, 
+  extractBoardId 
+} from '@/lib/auth';
 
-const toSnake = (n: any) => ({
-  id: n.id,
-  board_id: n.boardId,
-  type: n.type,
-  content: n.content,
-  root_id: n.rootId,
-  parent_id: n.parentId,
-  x: n.x, y: n.y, width: n.width, height: n.height,
-  created_at: n.createdAt, updated_at: n.updatedAt,
-});
+export default async function handler(
+  req: NextApiRequest, 
+  res: NextApiResponse<ApiSuccessResponse<Node[]> | ApiSuccessResponse<Node> | ApiErrorResponse>
+) {
+  const method = req.method;
+  console.log(`[API] ${method} /api/nodes`, {
+    query: req.query,
+    hasBody: !!req.body
+  });
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (req.method === 'GET') {
-      const board_id = req.query.board_id as string;
-      if (!board_id) return res.status(400).json({ error: 'board_id required' });
+    if (method === 'GET') {
+      // Extract board_id from query (supports both board_id and boardId)
+      const boardId = extractBoardId(req.query);
+      
+      if (!boardId) {
+        console.log('[API] Missing board_id parameter');
+        return sendAuthError(res, 400, 'board_id parameter is required', 'missing_board_id');
+      }
+
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        console.log('[API] Authentication failed:', authError);
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
+      }
+
+      // Authorize board access
+      const { authorized, error: authzError } = await authorizeBoardAccess(boardId, user.id);
+      if (!authorized) {
+        console.log('[API] Authorization failed:', authzError);
+        const status = authzError === 'Board not found' ? 404 : 403;
+        return sendAuthError(res, status, authzError || 'Access denied', 'unauthorized');
+      }
+
+      // Fetch nodes for the board
       const nodes = await prisma.node.findMany({
-        where: { boardId: board_id },
+        where: { boardId },
         orderBy: { createdAt: 'asc' }
       });
-      return res.status(200).json(nodes.map(toSnake));
+
+      console.log(`[API] Found ${nodes.length} nodes for board ${boardId}`);
+      return res.status(200).json({ 
+        data: nodes.map(nodeToDTO) 
+      });
     }
 
-    if (req.method === 'POST') {
-      const b = req.body || {};
-      if (!b.board_id || !b.type || typeof b.content !== 'string') {
-        return res.status(400).json({ error: 'board_id, type, content required' });
+    if (method === 'POST') {
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
+
+      const body = req.body as CreateNodeRequest;
+      
+      if (!body.board_id || !body.type || !body.content || 
+          body.x === undefined || body.y === undefined || 
+          body.width === undefined || body.height === undefined) {
+        return sendAuthError(res, 400, 'board_id, type, content, x, y, width, height are required', 'missing_fields');
+      }
+
+      if (!isValidNodeType(body.type)) {
+        return sendAuthError(res, 400, 'Invalid node type', 'invalid_node_type');
+      }
+
+      // Authorize board access
+      const { authorized } = await authorizeBoardAccess(body.board_id, user.id);
+      if (!authorized) {
+        return sendAuthError(res, 403, 'Access denied', 'unauthorized');
+      }
+
       const node = await prisma.node.create({
         data: {
-          boardId: b.board_id,
-          type: b.type,
-          content: b.content,
-          rootId: b.root_id ?? null,
-          parentId: b.parent_id ?? null,
-          x: Number.isFinite(b.x) ? Math.floor(b.x) : 0,
-          y: Number.isFinite(b.y) ? Math.floor(b.y) : 0,
-          width: Number.isFinite(b.width) ? Math.floor(b.width) : 320,
-          height: Number.isFinite(b.height) ? Math.floor(b.height) : 140,
+          boardId: body.board_id,
+          type: body.type,
+          content: body.content,
+          rootId: body.root_id ?? null,
+          parentId: body.parent_id ?? null,
+          x: Math.floor(body.x),
+          y: Math.floor(body.y),
+          width: Math.floor(body.width),
+          height: Math.floor(body.height),
         },
       });
-      return res.status(201).json(toSnake(node));
+
+      console.log(`[API] Created node ${node.id} for board ${body.board_id}`);
+      return res.status(201).json({ data: nodeToDTO(node) });
     }
 
-    if (req.method === 'PUT') {
+    if (method === 'PUT') {
       const id = req.query.id as string;
-      if (!id) return res.status(400).json({ error: 'id required' });
+      
+      if (!id) {
+        return sendAuthError(res, 400, 'Node ID is required', 'missing_id');
+      }
 
-      const b = req.body || {};
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
+      }
+
+      // First check if node exists and get its board
+      const existingNode = await prisma.node.findUnique({
+        where: { id },
+        select: { boardId: true }
+      });
+
+      if (!existingNode) {
+        return sendAuthError(res, 404, 'Node not found', 'node_not_found');
+      }
+
+      // Authorize board access
+      const { authorized } = await authorizeBoardAccess(existingNode.boardId, user.id);
+      if (!authorized) {
+        return sendAuthError(res, 403, 'Access denied', 'unauthorized');
+      }
+
+      const body = req.body as UpdateNodeRequest;
       const data: any = {};
-      if ('content' in b) data.content = b.content;
-      if ('type' in b) data.type = b.type;
-      if ('root_id' in b) data.rootId = b.root_id ?? null;
-      if ('parent_id' in b) data.parentId = b.parent_id ?? null;
-      if ('x' in b) data.x = Math.floor(b.x);
-      if ('y' in b) data.y = Math.floor(b.y);
-      if ('width' in b) data.width = Math.floor(b.width);
-      if ('height' in b) data.height = Math.floor(b.height);
+      
+      if (body.content !== undefined) data.content = body.content;
+      if (body.type !== undefined) {
+        if (!isValidNodeType(body.type)) {
+          return sendAuthError(res, 400, 'Invalid node type', 'invalid_node_type');
+        }
+        data.type = body.type;
+      }
+      if (body.root_id !== undefined) data.rootId = body.root_id;
+      if (body.parent_id !== undefined) data.parentId = body.parent_id;
+      if (body.x !== undefined) data.x = Math.floor(body.x);
+      if (body.y !== undefined) data.y = Math.floor(body.y);
+      if (body.width !== undefined) data.width = Math.floor(body.width);
+      if (body.height !== undefined) data.height = Math.floor(body.height);
+
+      if (Object.keys(data).length === 0) {
+        return sendAuthError(res, 400, 'At least one field must be provided for update', 'no_update_fields');
+      }
 
       const node = await prisma.node.update({ where: { id }, data });
-      return res.status(200).json(toSnake(node));
+
+      console.log(`[API] Updated node ${id}`);
+      return res.status(200).json({ data: nodeToDTO(node) });
     }
 
     res.setHeader('Allow', 'GET, POST, PUT');
-    return res.status(405).end();
-  } catch (e: any) {
-    console.error('nodes api error:', e);
-    return res.status(500).json({ error: 'server_error' });
+    return sendAuthError(res, 405, 'Method not allowed', 'method_not_allowed');
+  } catch (error: unknown) {
+    console.error('[API] nodes error:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return sendAuthError(res, 500, errorMessage, 'server_error');
   }
 }

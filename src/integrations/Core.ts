@@ -4,7 +4,12 @@ export async function InvokeLLM(params: {
   add_context_from_internet?: boolean 
 }) {
   try {
-    const response = await fetch('/api/llm', {
+    // Add timeout to frontend request as well
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Frontend timeout: AI request took longer than 45 seconds')), 45000);
+    });
+
+    const apiCall = fetch('/api/llm', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -13,6 +18,8 @@ export async function InvokeLLM(params: {
         prompt: params.prompt,
       }),
     });
+
+    const response = await Promise.race([apiCall, timeoutPromise]) as Response;
 
     if (!response.ok) {
       const error = await response.text();

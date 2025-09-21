@@ -1,4 +1,6 @@
 // Base API configuration
+import type { Node as NodeType } from '@/types/domain';
+
 const API_BASE = '';
 
 // Helper function for making API requests
@@ -18,12 +20,16 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
     throw new Error(`API Error: ${response.status} - ${error}`);
   }
 
-  return response.json();
+  const result = await response.json();
+  
+  // Extract data from the new {data: ...} envelope format
+  // For backward compatibility, if no 'data' property exists, return the result as-is
+  return result.data ?? result;
 }
 
 // Board entity
 export class Board {
-  static async list(orderBy: string = '-created_date', limit?: number) {
+  static async list() {
     try {
       const response = await apiRequest('/api/boards');
       return response;
@@ -82,7 +88,7 @@ export class Node {
     }
   }
 
-  static async update(id: string, data: any) {
+  static async update(id: string, data: Partial<Omit<NodeType, 'id'>>) {
     try {
       const response = await apiRequest(`/api/nodes?id=${id}`, {
         method: 'PUT',

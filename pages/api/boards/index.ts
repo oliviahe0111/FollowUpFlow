@@ -1,84 +1,80 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
-import { createServerClient } from '@supabase/ssr';
+import { 
+  Board, 
+  ApiSuccessResponse, 
+  ApiErrorResponse, 
+  CreateBoardRequest,
+  boardToDTO
+} from '@/types/domain';
+import { 
+  authenticateRequest, 
+  sendAuthError 
+} from '@/lib/auth';
 
-const toSnake = (b: any) => ({
-  id: b.id,
-  title: b.title,
-  description: b.description,
-  created_at: b.createdAt,
-  owner_id: (b as any).ownerId,
-});
+export default async function handler(
+  req: NextApiRequest, 
+  res: NextApiResponse<ApiSuccessResponse<Board[]> | ApiSuccessResponse<Board> | ApiErrorResponse>
+) {
+  const method = req.method;
+  console.log(`[API] ${method} /api/boards`, {
+    hasBody: !!req.body
+  });
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // Create Supabase client for Pages API
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return Object.keys(req.cookies).map(name => ({
-              name,
-              value: req.cookies[name] || ''
-            }))
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              res.setHeader('Set-Cookie', `${name}=${value}; Path=/; HttpOnly; SameSite=Lax${options?.secure ? '; Secure' : ''}`)
-            })
-          },
-        },
-      }
-    )
-
-    if (req.method === 'GET') {
-      // Get current user session
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error || !user) {
-        // Return empty array for unauthenticated users
-        return res.status(200).json([]);
+    if (method === 'GET') {
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        console.log('[API] Authentication failed:', authError);
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
 
-      // Only return boards owned by the current user
+      // Fetch boards owned by the user
       const boards = await prisma.board.findMany({
-        where: { ownerId: user.id } as any,
+        where: { 
+          ownerId: user.id 
+        } as any, // Type assertion until Prisma schema is synced
         orderBy: { createdAt: 'desc' }
       });
-      return res.status(200).json(boards.map(toSnake));
+
+      console.log(`[API] Found ${boards.length} boards for user ${user.id}`);
+      return res.status(200).json({ 
+        data: boards.map(boardToDTO) 
+      });
     }
 
-    if (req.method === 'POST') {
-      // Get current user session
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error || !user) {
-        return res.status(401).json({ error: 'Authentication required' });
+    if (method === 'POST') {
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
 
-      // Only accept title and description from client
-      const { title, description } = req.body || {};
-      if (!title || typeof title !== 'string') {
-        return res.status(400).json({ error: 'title required' });
-      }
+      const body = req.body as CreateBoardRequest;
       
-      // Create board with ownerId set to authenticated user's UUID
+      if (!body.title?.trim()) {
+        return sendAuthError(res, 400, 'title is required', 'missing_title');
+      }
+
       const board = await prisma.board.create({
         data: {
-          title,
-          description: description || '',
+          title: body.title.trim(),
+          description: body.description?.trim() || null,
           ownerId: user.id,
-        } as any,
+        } as any, // Type assertion until Prisma schema is synced
       });
-      return res.status(201).json(toSnake(board));
+
+      console.log(`[API] Created board ${board.id} for user ${user.id}`);
+      return res.status(201).json({ data: boardToDTO(board) });
     }
 
     res.setHeader('Allow', 'GET, POST');
-    return res.status(405).end();
-  } catch (e: any) {
-    console.error('boards api error:', e);
-    return res.status(500).json({ error: 'server_error' });
+    return sendAuthError(res, 405, 'Method not allowed', 'method_not_allowed');
+  } catch (error: unknown) {
+    console.error('[API] boards error:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return sendAuthError(res, 500, errorMessage, 'server_error');
   }
 }

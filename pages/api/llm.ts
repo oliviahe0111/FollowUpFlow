@@ -14,23 +14,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-
-interface LLMRequest {
-  prompt: string;
-  system?: string;
-  max_completion_tokens?: number; // GitHub Models uses max_completion_tokens
-  max_tokens?: number; // Legacy support - will be mapped to max_completion_tokens
-  temperature?: number;
-}
-
-interface LLMResponse {
-  content: string;
-}
-
-interface ErrorResponse {
-  error: string;
-  code?: string;
-}
+import { LLMResponse, ErrorResponse, isLLMRequest } from '@/types/api';
 
 // Retry helper with exponential backoff
 async function sleep(ms: number): Promise<void> {
@@ -51,7 +35,7 @@ export default async function handler(
     // Environment variable validation
     const token = process.env.GITHUB_TOKEN;
     const endpoint = process.env.GITHUB_MODELS_ENDPOINT || 'https://models.github.ai/inference';
-    const model = process.env.GITHUB_MODELS_MODEL || 'openai/gpt-5';
+    const model = process.env.GITHUB_MODELS_MODEL || 'gpt-4o-mini'; // Use faster, more reliable model
 
     if (!token) {
       console.log('Missing GITHUB_TOKEN environment variable');
@@ -71,37 +55,17 @@ export default async function handler(
     });
 
     // Request validation
-    const { prompt, system, max_tokens, max_completion_tokens, temperature }: LLMRequest = req.body || {};
-
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    if (!isLLMRequest(req.body)) {
       return res.status(400).json({ 
-        error: 'prompt is required and must be a non-empty string',
+        error: 'Invalid request body. prompt is required and must be a non-empty string',
         code: 'invalid_input'
       });
     }
 
-    if (system && typeof system !== 'string') {
-      return res.status(400).json({ 
-        error: 'system must be a string if provided',
-        code: 'invalid_input'
-      });
-    }
+    const { prompt, system, max_tokens, max_completion_tokens, temperature } = req.body;
 
     // Support both max_tokens (legacy) and max_completion_tokens (GitHub Models standard)
     const maxTokens = max_completion_tokens || max_tokens;
-    if (maxTokens && (typeof maxTokens !== 'number' || maxTokens < 1)) {
-      return res.status(400).json({ 
-        error: 'max_tokens/max_completion_tokens must be a positive number if provided',
-        code: 'invalid_input'
-      });
-    }
-
-    if (temperature && (typeof temperature !== 'number' || temperature < 0 || temperature > 2)) {
-      return res.status(400).json({ 
-        error: 'temperature must be a number between 0 and 2 if provided',
-        code: 'invalid_input'
-      });
-    }
 
     // Dynamic imports to avoid build-time issues
     const [{ default: ModelClient, isUnexpected }, { AzureKeyCredential }] = await Promise.all([
@@ -122,29 +86,31 @@ export default async function handler(
     messages.push({ role: 'user', content: prompt });
 
     // Request parameters - only include provided values to use model defaults
-    const requestBody: any = {
+    const requestBody = {
       messages,
       model,
+      max_completion_tokens: maxTokens || 500, // Default to 500 tokens for faster responses
+      ...(temperature !== undefined && { temperature })
     };
 
-    // Only add optional parameters if explicitly provided
-    if (maxTokens) {
-      requestBody.max_completion_tokens = maxTokens;
-    }
-
-    // Only add temperature if explicitly provided (model default is usually 1)
-    if (temperature !== undefined) {
-      requestBody.temperature = temperature;
-    }
-
     // Main request with single retry for transient errors
-    let lastError: any = null;
+    let lastError: unknown = null;
     
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await client.path("/chat/completions").post({
-          body: requestBody
+        // Set a reasonable timeout for the entire operation
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000);
         });
+        
+        const apiCall = async () => {
+          const response = await client.path("/chat/completions").post({
+            body: requestBody
+          });
+          return response;
+        };
+        
+        const response = await Promise.race([apiCall(), timeoutPromise]) as any;
 
         if (isUnexpected(response)) {
           const status = parseInt(response.status as string, 10);
@@ -215,7 +181,7 @@ export default async function handler(
           isRetryable: attempt === 0
         });
 
-        // Retry on network/connection errors
+        // Retry on network/connection errors and timeouts
         if (attempt === 0 && (
           error.code === 'ECONNRESET' ||
           error.code === 'ETIMEDOUT' ||
@@ -234,8 +200,16 @@ export default async function handler(
 
     // All retries exhausted
     console.error('All retry attempts failed:', {
-      finalError: lastError?.message || 'Unknown error'
+      finalError: lastError instanceof Error ? lastError.message : 'Unknown error'
     });
+
+    // Check if the final error was a timeout
+    if (lastError instanceof Error && lastError.message.includes('timeout')) {
+      return res.status(504).json({
+        error: 'Request timed out. The AI model took too long to respond.',
+        code: 'timeout'
+      });
+    }
 
     return res.status(500).json({
       error: 'Failed to connect to GitHub Models after retries.',

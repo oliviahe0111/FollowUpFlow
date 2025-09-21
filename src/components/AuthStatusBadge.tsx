@@ -2,13 +2,49 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import type { User } from '@supabase/supabase-js'
 
+// Helper function to validate avatar URLs
+const isValidAvatarUrl = (url: string): boolean => {
+  try {
+    const parsedUrl = new URL(url)
+    // Only allow HTTPS and common avatar domains
+    return (
+      parsedUrl.protocol === 'https:' &&
+      (parsedUrl.hostname.endsWith('.googleusercontent.com') ||
+       parsedUrl.hostname.endsWith('.gravatar.com') ||
+       parsedUrl.hostname.endsWith('.githubusercontent.com'))
+    )
+  } catch {
+    return false
+  }
+}
+
+// Fallback avatar component with user initials
+const FallbackAvatar = ({ user }: { user: User }) => {
+  const getInitials = () => {
+    const name = user.user_metadata?.full_name || user.email || 'U'
+    return name
+      .split(' ')
+      .map((part: string) => part.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join('')
+  }
+
+  return (
+    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+      {getInitials()}
+    </div>
+  )
+}
+
 export default function AuthStatusBadge() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [avatarError, setAvatarError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -73,14 +109,30 @@ export default function AuthStatusBadge() {
   }
 
   if (user) {
+    const avatarUrl = user.user_metadata?.avatar_url
+    const hasValidAvatar = avatarUrl && isValidAvatarUrl(avatarUrl) && !avatarError
+
     return (
       <div className="flex items-center gap-3">
-        {user.user_metadata?.avatar_url && (
-          <img
-            src={user.user_metadata.avatar_url}
+        {hasValidAvatar ? (
+          <Image
+            src={avatarUrl}
             alt="Avatar"
+            width={32}
+            height={32}
             className="w-8 h-8 rounded-full"
+            onError={() => {
+              setAvatarError(avatarUrl)
+            }}
+            onLoad={() => {
+              // Clear any previous error if image loads successfully
+              if (avatarError === avatarUrl) {
+                setAvatarError(null)
+              }
+            }}
           />
+        ) : (
+          <FallbackAvatar user={user} />
         )}
         <span className="text-sm text-gray-700">
           {user.user_metadata?.full_name || user.email}

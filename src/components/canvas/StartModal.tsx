@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Lightbulb, Send, Plus, Clock, ArrowRight } from 'lucide-react';
 import { Board } from '@/entities/all';
+import type { Board as BoardType } from '@/types/domain';
 
 // Utility function for retry logic
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
@@ -26,7 +27,7 @@ interface StartModalProps {
   onCreateBoard: (title: string, rootQuestion: string) => Promise<void>;
   onAddRootQuestion: (rootQuestion: string) => Promise<void>;
   currentBoard?: { id: string; title: string } | null;
-  onSelectBoard?: (board: any) => void;
+  onSelectBoard?: (board: BoardType) => void;
 }
 
 export default function StartModal({ 
@@ -40,8 +41,7 @@ export default function StartModal({
   const [title, setTitle] = useState('');
   const [rootQuestion, setRootQuestion] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [existingBoards, setExistingBoards] = useState<any[]>([]);
-  const [loadingBoards, setLoadingBoards] = useState(false);
+  const [existingBoards, setExistingBoards] = useState<BoardType[]>([]);
 
   const isAddingToExisting = !!currentBoard;
 
@@ -49,14 +49,11 @@ export default function StartModal({
     if (open && !isAddingToExisting) {
       // Load existing boards when modal opens for new board creation
       const loadBoards = async () => {
-        setLoadingBoards(true);
         try {
-          const boards = await retryWithBackoff(() => Board.list('-created_at', 10));
+          const boards = await retryWithBackoff(() => Board.list());
           setExistingBoards(boards);
         } catch (error) {
           console.error('Error loading boards:', error);
-        } finally {
-          setLoadingBoards(false);
         }
       };
       loadBoards();

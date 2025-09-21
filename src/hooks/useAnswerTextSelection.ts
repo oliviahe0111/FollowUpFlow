@@ -134,7 +134,7 @@ export function useAnswerTextSelection() {
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
-  }, []);
+  }, [selection, suppressClearUntil]);
 
   return { selection, snapshotSelection, clear, suppressClearTemporarily };
 }

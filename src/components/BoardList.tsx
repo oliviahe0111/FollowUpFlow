@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Brain, Plus, MessageCircle, Calendar, ArrowRight, AlertTriangle, X } from 'lucide-react';
+import { Brain, Plus, MessageCircle, Calendar, AlertTriangle, X } from 'lucide-react';
 import { Board } from '@/entities/all';
+import type { Board as BoardType } from '@/types/domain';
 import AuthStatusBadge from '@/components/AuthStatusBadge';
 
 // Utility function for retry logic
@@ -20,13 +21,13 @@ const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 
 };
 
 interface BoardListProps {
-  onSelectBoard: (board: any) => void;
+  onSelectBoard: (board: BoardType) => void;
   onCreateNewBoard: () => void;
-  currentBoard?: any;
+  currentBoard?: BoardType;
 }
 
 export default function BoardList({ onSelectBoard, onCreateNewBoard, currentBoard }: BoardListProps) {
-  const [boards, setBoards] = useState<any[]>([]);
+  const [boards, setBoards] = useState<BoardType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingBoardId, setDeletingBoardId] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export default function BoardList({ onSelectBoard, onCreateNewBoard, currentBoar
       setError(null);
       
       try {
-        const allBoards = await retryWithBackoff(() => Board.list('-created_at', 50));
+        const allBoards = await retryWithBackoff(() => Board.list());
         setBoards(allBoards);
       } catch (error) {
         console.error('Error loading boards:', error);

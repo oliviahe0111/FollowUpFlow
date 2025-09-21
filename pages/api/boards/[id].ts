@@ -1,42 +1,35 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@/lib/prisma';
-import { createServerClient } from '@supabase/ssr';
+import { 
+  ApiSuccessResponse, 
+  ApiErrorResponse,
+  isValidId
+} from '@/types/domain';
+import { 
+  authenticateRequest, 
+  sendAuthError 
+} from '@/lib/auth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest, 
+  res: NextApiResponse<ApiSuccessResponse<{ message: string }> | ApiErrorResponse>
+) {
+  const { id } = req.query;
+  const method = req.method;
+  
+  console.log(`[API] ${method} /api/boards/${id}`);
+
+  if (!id || typeof id !== 'string' || !isValidId(id)) {
+    return sendAuthError(res, 400, 'Valid board ID is required', 'invalid_board_id');
+  }
+
   try {
-    // Create Supabase client for Pages API
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return Object.keys(req.cookies).map(name => ({
-              name,
-              value: req.cookies[name] || ''
-            }))
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              res.setHeader('Set-Cookie', `${name}=${value}; Path=/; HttpOnly; SameSite=Lax${options?.secure ? '; Secure' : ''}`)
-            })
-          },
-        },
-      }
-    )
-
-    if (req.method === 'DELETE') {
-      // Get current user session
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error || !user) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-
-      const { id } = req.query;
-      
-      if (!id || typeof id !== 'string') {
-        return res.status(400).json({ error: 'Board ID is required' });
+    if (method === 'DELETE') {
+      // Authenticate user
+      const { user, error: authError } = await authenticateRequest(req, res);
+      if (!user) {
+        console.log('[API] Authentication failed:', authError);
+        return sendAuthError(res, 401, 'Authentication required', 'unauthenticated');
       }
 
       // Check if the board exists and is owned by the current user
@@ -45,13 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       if (!board) {
-        return res.status(404).json({ error: 'Board not found' });
+        return sendAuthError(res, 404, 'Board not found', 'board_not_found');
       }
 
       // Check ownership - only the owner can delete their board
       const boardOwnerId = (board as any).ownerId;
       if (boardOwnerId !== user.id) {
-        return res.status(403).json({ error: 'You can only delete your own boards' });
+        return sendAuthError(res, 403, 'You can only delete your own boards', 'forbidden');
       }
 
       // Delete the board (this will cascade delete nodes and edges due to the schema)
@@ -59,13 +52,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { id }
       });
 
-      return res.status(200).json({ message: 'Board deleted successfully' });
+      console.log(`[API] Board ${id} deleted successfully by user ${user.id}`);
+      return res.status(200).json({ 
+        data: { message: 'Board deleted successfully' } 
+      });
     }
 
     res.setHeader('Allow', 'DELETE');
-    return res.status(405).end();
-  } catch (e: any) {
-    console.error('delete board api error:', e);
-    return res.status(500).json({ error: 'server_error' });
+    return sendAuthError(res, 405, 'Method not allowed', 'method_not_allowed');
+  } catch (error: unknown) {
+    console.error('[API] delete board error:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return sendAuthError(res, 500, errorMessage, 'server_error');
   }
 }

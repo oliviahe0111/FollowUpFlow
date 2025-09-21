@@ -10,7 +10,7 @@ export default function AuthCodeError() {
           <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Authentication Error</h1>
           <p className="text-gray-600 mb-6">
-            Sorry, we couldn't sign you in. There was an error processing your authentication request.
+            Sorry, we couldn&apos;t sign you in. There was an error processing your authentication request.
           </p>
           <div className="space-y-3">
             <Button asChild className="w-full">

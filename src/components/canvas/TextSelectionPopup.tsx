@@ -100,7 +100,7 @@ export default function TextSelectionPopup({
         <div className="mb-3">
           <span className="text-xs font-medium text-gray-600 mb-1 block">Selected text:</span>
           <div className="text-xs text-gray-700 bg-gray-50 p-2 rounded border max-h-16 overflow-y-auto">
-            "{selectedText.length > 80 ? selectedText.substring(0, 80) + '...' : selectedText}"
+            &quot;{selectedText.length > 80 ? selectedText.substring(0, 80) + '...' : selectedText}&quot;
           </div>
         </div>
         

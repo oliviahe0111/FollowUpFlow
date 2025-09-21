@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Board, Node, Edge } from '@/entities/all';
+import type { 
+  Board as BoardType, 
+  Node as NodeType, 
+  Edge as EdgeType 
+} from '@/types/domain';
 import { InvokeLLM } from '@/integrations/Core';
 import { Button } from '@/components/ui/button';
 import { Plus, Brain, Loader2, AlertTriangle } from 'lucide-react';
@@ -34,10 +39,10 @@ const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 
 };
 
 export default function BrainstormPage() {
-  const [currentBoard, setCurrentBoard] = useState<any>(null);
+  const [currentBoard, setCurrentBoard] = useState<BoardType | null>(null);
   const [showBoardList, setShowBoardList] = useState(true);
-  const [nodes, setNodes] = useState<any[]>([]);
-  const [edges, setEdges] = useState<any[]>([]);
+  const [nodes, setNodes] = useState<NodeType[]>([]);
+  const [edges, setEdges] = useState<EdgeType[]>([]);
   const [showStartModal, setShowStartModal] = useState(false);
   const [modalMode, setModalMode] = useState<'new-board' | 'add-question'>('new-board');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,7 +84,7 @@ export default function BrainstormPage() {
   }, [showSelectionPopup]);
 
   // calculateNewNodePosition does not depend on any state directly, only its arguments
-  const calculateNewNodePosition = useCallback((parentNodeId: string, allNodes: any[]) => {
+  const calculateNewNodePosition = useCallback((parentNodeId: string, allNodes: NodeType[]) => {
     const parentNode = allNodes.find(n => n.id === parentNodeId);
     if (!parentNode) return { x: 100, y: 100 }; // Fallback position
 
@@ -98,14 +103,14 @@ export default function BrainstormPage() {
     return { x, y };
   }, []);
 
-  const loadBoard = useCallback(async (board: any) => {
+  const loadBoard = useCallback(async (board: BoardType) => {
     try {
       setCurrentBoard(board);
 
       // Load nodes and edges with retry logic
       const [boardNodes, boardEdges] = await Promise.all([
-        retryWithBackoff(() => Node.filter({ board_id: board.id })),
-        retryWithBackoff(() => Edge.filter({ board_id: board.id }))
+        retryWithBackoff(() => Node.filter({ board_id: board.id })) as Promise<NodeType[]>,
+        retryWithBackoff(() => Edge.filter({ board_id: board.id })) as Promise<EdgeType[]>
       ]);
 
       setNodes(boardNodes);
@@ -113,9 +118,9 @@ export default function BrainstormPage() {
       setError(null);
 
       // Build root question color mapping
-      const rootQuestions = boardNodes.filter((n: any) => n.type === 'root_question');
+      const rootQuestions = boardNodes.filter(n => n.type === 'root_question');
       const colorMapping: Record<string, number> = {};
-      rootQuestions.forEach((root: any, index: number) => {
+      rootQuestions.forEach((root, index: number) => {
         colorMapping[root.id] = index;
       });
       setRootQuestionOrder(colorMapping);
@@ -148,7 +153,7 @@ export default function BrainstormPage() {
   }, [loadBoard]);
 
   // Build contextual prompt with conversation history
-  const buildContextualPrompt = (parentNodeId: string, question: string, currentNodes: any[], rootId: string): string => {
+  const buildContextualPrompt = (parentNodeId: string, question: string, currentNodes: NodeType[], rootId: string): string => {
     let context = "";
     
     // Find the root question for overall context
@@ -197,7 +202,7 @@ export default function BrainstormPage() {
         conversationChain.unshift(`A: ${node.content.substring(0, 200)}${node.content.length > 200 ? '...' : ''}`);
       }
       
-      currentNodeId = node.parent_id;
+      currentNodeId = node.parent_id || '';
       depth++;
     }
     
@@ -208,7 +213,7 @@ export default function BrainstormPage() {
     return `${context}New Question: ${question}\n\nProvide a thoughtful, detailed response that builds on this conversation context. Be insightful and offer specific, actionable ideas.`;
   };
 
-  const generateAIResponse = useCallback(async (parentNodeId: string, question: string, boardId: string, rootId: string, currentNodes: any[]) => {
+  const generateAIResponse = useCallback(async (parentNodeId: string, question: string, boardId: string, rootId: string, currentNodes: NodeType[]) => {
     setIsGenerating(true);
     setGeneratingNodeId(parentNodeId);
     setError(null);
@@ -225,7 +230,7 @@ export default function BrainstormPage() {
         add_context_from_internet: false
       });
 
-      const responseType = currentNodes.find((n: any) => n.id === parentNodeId)?.type === 'root_question' ? 'ai_answer' : 'followup_answer';
+      const responseType = currentNodes.find(n => n.id === parentNodeId)?.type === 'root_question' ? 'ai_answer' : 'followup_answer';
 
       const { x, y } = calculateNewNodePosition(parentNodeId, currentNodes);
 
@@ -301,7 +306,7 @@ export default function BrainstormPage() {
     }
   }, [generateAIResponse]);
 
-  const handleSelectBoard = useCallback(async (board: any) => {
+  const handleSelectBoard = useCallback(async (board: BoardType) => {
     try {
       await loadBoard(board);
       setShowBoardList(false);
@@ -330,7 +335,7 @@ export default function BrainstormPage() {
       setError(null);
 
       // Find a good position for the new root question below the bottom-most existing root
-      const existingRoots = nodes.filter((n: any) => n.type === 'root_question');
+      const existingRoots = nodes.filter(n => n.type === 'root_question');
       const bottomMostRoot = existingRoots.reduce((prev, current) => {
         const prevY = prev.y !== undefined ? prev.y : -Infinity;
         const prevHeight = prev.height !== undefined ? prev.height : 0;
@@ -388,7 +393,7 @@ export default function BrainstormPage() {
     });
 
     try {
-      const parentNode = nodes.find((n: any) => n.id === parentNodeId);
+      const parentNode = nodes.find(n => n.id === parentNodeId);
       if (!parentNode) {
         throw new Error('Parent node not found.');
       }
@@ -473,7 +478,7 @@ export default function BrainstormPage() {
     e.preventDefault();
     e.stopPropagation(); // Prevent canvas panning when dragging a node
 
-    let nodeElement = (e.currentTarget as HTMLElement).closest('[data-node-id]') as HTMLElement;
+    const nodeElement = (e.currentTarget as HTMLElement).closest('[data-node-id]') as HTMLElement;
     if (!nodeElement) return;
 
     const nodeId = nodeElement.getAttribute('data-node-id');
@@ -488,7 +493,7 @@ export default function BrainstormPage() {
     const startX = (e.clientX - rect.left - offset.x) / zoom;
     const startY = (e.clientY - rect.top - offset.y) / zoom;
 
-    const node = nodes.find((n: any) => n.id === nodeId);
+    const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
     const offsetX = startX - node.x;
@@ -498,7 +503,7 @@ export default function BrainstormPage() {
       const newX = (moveEvent.clientX - rect.left - offset.x) / zoom - offsetX;
       const newY = (moveEvent.clientY - rect.top - offset.y) / zoom - offsetY;
 
-      setNodes(prev => prev.map((n: any) =>
+      setNodes(prev => prev.map(n =>
         n.id === nodeId ? { ...n, x: newX, y: newY } : n
       ));
     };
@@ -507,7 +512,7 @@ export default function BrainstormPage() {
       setIsDraggingNode(false);
       setDraggedNode(null);
 
-      const node = nodes.find((n: any) => n.id === nodeId);
+      const node = nodes.find(n => n.id === nodeId);
       if (node) {
         try {
           await retryWithBackoff(() => Node.update(nodeId, { x: node.x, y: node.y }));
@@ -677,13 +682,13 @@ export default function BrainstormPage() {
           onClose={() => setShowStartModal(false)}
           onCreateBoard={createBoard}
           onAddRootQuestion={addRootQuestion}
-          currentBoard={null}
+          currentBoard={undefined}
           onSelectBoard={handleSelectBoard}
         />
         <BoardList
           onSelectBoard={handleSelectBoard}
           onCreateNewBoard={handleCreateNewBoard}
-          currentBoard={null}
+          currentBoard={undefined}
         />
       </>
     );
@@ -808,7 +813,10 @@ export default function BrainstormPage() {
                 }}
               >
                 <CanvasNode
-                  node={node}
+                  node={{
+                    ...node,
+                    parent_id: node.parent_id || undefined
+                  }}
                   onAddFollowup={handleAddFollowup}
                   onDelete={handleDeleteNode}
                   isGenerating={generatingNodeId === node.id}

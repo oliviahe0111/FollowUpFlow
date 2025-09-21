@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { MessageCircle, Sparkles, Plus, Send, Loader2, X } from 'lucide-react';
+import type { Node as NodeType } from '@/types/domain';
 
 const nodeTypeConfig = {
   root_question: { icon: MessageCircle, title: 'Root Question' },
@@ -39,7 +40,7 @@ interface CanvasNodeProps {
   onMouseDown?: (e: React.MouseEvent) => void;
   isDragging?: boolean;
   rootQuestionIndex?: number;
-  allNodes?: any[]; // Array of all nodes to find parent/answer
+  allNodes?: NodeType[]; // Array of all nodes to find parent/answer
 }
 
 export default function CanvasNode({
@@ -58,18 +59,7 @@ export default function CanvasNode({
 
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Delete handler
-  const handleDelete = () => {
-    if (confirm(`Are you sure you want to delete this ${node.type.replace('_', ' ')}? This action cannot be undone.`)) {
-      onDelete?.(node.id);
-    }
-  };
-
-  // Don't render standalone AI answers - they're shown inline with their question
-  if (node.type === 'ai_answer' || node.type === 'followup_answer') {
-    return null;
-  }
-
+  // Move hooks before any conditional returns
   // If this were an answer node, show its parent question (kept for completeness)
   const parentQuestion = useMemo(() => {
     if ((node.type === 'ai_answer' || node.type === 'followup_answer') && node.parent_id && allNodes.length > 0) {
@@ -88,6 +78,18 @@ export default function CanvasNode({
     }
     return null;
   }, [node.type, node.id, allNodes]);
+
+  // Delete handler
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to delete this ${node.type.replace('_', ' ')}? This action cannot be undone.`)) {
+      onDelete?.(node.id);
+    }
+  };
+
+  // Don't render standalone AI answers - they're shown inline with their question
+  if (node.type === 'ai_answer' || node.type === 'followup_answer') {
+    return null;
+  }
 
   const typeConfig = nodeTypeConfig[node.type as keyof typeof nodeTypeConfig];
   const colorConfig = rootQuestionColors[rootQuestionIndex % rootQuestionColors.length];
