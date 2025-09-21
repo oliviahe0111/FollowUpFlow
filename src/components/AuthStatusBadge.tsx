@@ -89,7 +89,7 @@ export default function AuthStatusBadge() {
           variant="outline"
           size="sm"
           onClick={handleSignOut}
-          className="text-xs"
+          className="text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors text-gray-800 font-medium border-gray-300"
         >
           Sign out
         </Button>
@@ -98,7 +98,12 @@ export default function AuthStatusBadge() {
   }
 
   return (
-    <Button onClick={handleSignIn} size="sm">
+    <Button 
+      onClick={handleSignIn} 
+      size="sm"
+      variant="outline"
+      className="text-sm hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors text-gray-800 font-medium border-gray-300"
+    >
       Sign in with Google
     </Button>
   )

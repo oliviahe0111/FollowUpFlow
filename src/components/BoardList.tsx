@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Brain, Plus, MessageCircle, Calendar, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Brain, Plus, MessageCircle, Calendar, ArrowRight, AlertTriangle, X } from 'lucide-react';
 import { Board } from '@/entities/all';
+import AuthStatusBadge from '@/components/AuthStatusBadge';
 
 // Utility function for retry logic
 const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, delay = 1000) => {
@@ -28,6 +29,41 @@ export default function BoardList({ onSelectBoard, onCreateNewBoard, currentBoar
   const [boards, setBoards] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingBoardId, setDeletingBoardId] = useState<string | null>(null);
+
+  const deleteBoard = async (boardId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent board selection when clicking delete
+    
+    if (!confirm('Are you sure you want to delete this board? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingBoardId(boardId);
+    
+    try {
+      const response = await fetch(`/api/boards/${boardId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete board');
+      }
+
+      // Remove the board from the local state
+      setBoards(prevBoards => prevBoards.filter(board => board.id !== boardId));
+      
+      // If the deleted board was the current board, clear the selection
+      if (currentBoard?.id === boardId) {
+        // You might want to call a callback here to clear the current board
+        // onSelectBoard(null); // Uncomment if you have this functionality
+      }
+    } catch (error) {
+      console.error('Error deleting board:', error);
+      setError('Failed to delete board. Please try again.');
+    } finally {
+      setDeletingBoardId(null);
+    }
+  };
 
   useEffect(() => {
     const loadBoards = async () => {
@@ -93,13 +129,16 @@ export default function BoardList({ onSelectBoard, onCreateNewBoard, currentBoar
                 <p className="text-sm text-gray-600 font-medium">AI-powered brainstorming boards</p>
               </div>
             </div>
-            <Button
-              onClick={onCreateNewBoard}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Board
-            </Button>
+            <div className="flex items-center gap-4">
+              <AuthStatusBadge />
+              <Button
+                onClick={onCreateNewBoard}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Board
+              </Button>
+            </div>
           </div>
         </div>
       </motion.header>
@@ -174,7 +213,18 @@ export default function BoardList({ onSelectBoard, onCreateNewBoard, currentBoar
                                 </span>
                               </div>
                             </div>
-                            <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0 ml-2" />
+                            <button
+                              onClick={(e) => deleteBoard(board.id, e)}
+                              disabled={deletingBoardId === board.id}
+                              className="p-1 rounded-full hover:bg-red-100 transition-colors group/delete flex-shrink-0 ml-2"
+                              title="Delete board"
+                            >
+                              <X className={`w-4 h-4 transition-colors ${
+                                deletingBoardId === board.id 
+                                  ? 'text-gray-400' 
+                                  : 'text-gray-400 group-hover/delete:text-red-600'
+                              }`} />
+                            </button>
                           </div>
                           
                           {board.description && (
