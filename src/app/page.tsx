@@ -429,6 +429,43 @@ export default function BrainstormPage() {
     }
   }, [currentBoard, nodes, calculateNewNodePosition, generateAIResponse]);
 
+  const handleDeleteNode = useCallback(async (nodeId: string) => {
+    if (!currentBoard) return;
+    setError(null);
+
+    try {
+      // Optimistically update UI first
+      const nodeToDelete = nodes.find(n => n.id === nodeId);
+      if (!nodeToDelete) return;
+
+      // Remove the node and its edges from state
+      setNodes(prev => prev.filter(n => n.id !== nodeId));
+      setEdges(prev => prev.filter(e => e.source_id !== nodeId && e.target_id !== nodeId));
+
+      // Call the API to delete the node (this will handle reparenting)
+      await retryWithBackoff(() => Node.delete(nodeId));
+
+      // Refresh the board data to get the updated parent-child relationships
+      const updatedNodes = await Node.filter({ board_id: currentBoard.id });
+      const updatedEdges = await Edge.filter({ board_id: currentBoard.id });
+      
+      setNodes(updatedNodes);
+      setEdges(updatedEdges);
+
+    } catch (error) {
+      console.error('Error deleting node:', error);
+      setError('Failed to delete question. Please try again.');
+      
+      // Refresh data to restore consistent state
+      if (currentBoard) {
+        const nodes = await Node.filter({ board_id: currentBoard.id });
+        const edges = await Edge.filter({ board_id: currentBoard.id });
+        setNodes(nodes);
+        setEdges(edges);
+      }
+    }
+  }, [currentBoard, nodes]);
+
   // Canvas interaction handlers
   const handleNodeMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left click
@@ -769,6 +806,7 @@ export default function BrainstormPage() {
                 <CanvasNode
                   node={node}
                   onAddFollowup={handleAddFollowup}
+                  onDelete={handleDeleteNode}
                   isGenerating={generatingNodeId === node.id}
                   isDragging={draggedNode === node.id}
                   onMouseDown={handleNodeMouseDown}

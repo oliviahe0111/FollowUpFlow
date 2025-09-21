@@ -94,6 +94,19 @@ export class Node {
       throw error;
     }
   }
+
+  static async delete(id: string) {
+    try {
+      const response = await apiRequest('/api/nodes/delete', {
+        method: 'POST',
+        body: JSON.stringify({ nodeId: id }),
+      });
+      return response;
+    } catch (error) {
+      console.error('Error deleting node:', error);
+      throw error;
+    }
+  }
 }
 
 // Edge entity

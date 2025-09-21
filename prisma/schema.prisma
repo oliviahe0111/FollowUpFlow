@@ -21,31 +21,64 @@ model Board {
   title       String
   description String?
   createdAt   DateTime @default(now())
+
+  ownerId     String?  // @db.Uuid
+
   nodes       Node[]
   edges       Edge[]
+
+  @@index([ownerId])
 }
 
 model Node {
   id        String   @id @default(cuid())
+
+  // Board
   boardId   String
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  // Self relation: parent -> children
+  parentId  String?
+  parent    Node?    @relation("NodeToChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Node[]   @relation("NodeToChildren")
+
+  // Root relation: root -> descendants in same thread
+  rootId    String?
+  root      Node?    @relation("NodeToRoot", fields: [rootId], references: [id], onDelete: SetNull)
+  rootDesc  Node[]   @relation("NodeToRoot")
+
   type      NodeType
   content   String
-  rootId    String?
-  parentId  String?
   x         Int
   y         Int
   width     Int
   height    Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([boardId])
+  @@index([parentId])
+  @@index([rootId])
+  outgoingEdges Edge[] @relation("EdgeSource") // this node -> others
+  incomingEdges Edge[] @relation("EdgeTarget") // others -> this node
 }
 
 model Edge {
   id        String   @id @default(cuid())
+
   boardId   String
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  // Tie edges to nodes so edges auto-delete when either endpoint is deleted
   sourceId  String
+  source    Node     @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+
   targetId  String
+  target    Node     @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
+
+  @@index([boardId])
+  @@index([sourceId])
+  @@index([targetId])
 }

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { MessageCircle, Sparkles, Plus, Send, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 const nodeTypeConfig = {
   root_question: { icon: MessageCircle, title: 'Root Question' },
@@ -34,6 +34,7 @@ interface CanvasNodeProps {
     height: number;
   };
   onAddFollowup: (nodeId: string, question: string) => void;
+  onDelete?: (nodeId: string) => void;
   isGenerating: boolean;
   onMouseDown?: (e: React.MouseEvent) => void;
   isDragging?: boolean;
@@ -44,6 +45,7 @@ interface CanvasNodeProps {
 export default function CanvasNode({
   node,
   onAddFollowup,
+  onDelete,
   isGenerating,
   onMouseDown,
   isDragging,
@@ -55,6 +57,13 @@ export default function CanvasNode({
   const [isExpanded, setIsExpanded] = useState(true);
 
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Delete handler
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to delete this ${node.type.replace('_', ' ')}? This action cannot be undone.`)) {
+      onDelete?.(node.id);
+    }
+  };
 
   // Don't render standalone AI answers - they're shown inline with their question
   if (node.type === 'ai_answer' || node.type === 'followup_answer') {
@@ -154,15 +163,18 @@ export default function CanvasNode({
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                   {typeConfig.title}
                 </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-1 hover:bg-gray-100/50 text-gray-700 hover:text-gray-900"
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </Button>
+                {onDelete && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-1 hover:bg-red-100 text-gray-500 hover:text-red-600"
+                    onClick={handleDelete}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="Delete question"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                )}
               </div>
 
               {/* (Only relevant if this were an answer node; kept harmless) */}
@@ -193,23 +205,6 @@ export default function CanvasNode({
                   {node.content}
                 </div>
               </div>
-
-              {/* Inline AI Answer (if present) */}
-              {aiAnswer && (
-                <div className="border-t pt-4" onMouseDown={(e) => e.stopPropagation()}>
-                  <h3 className="text-sm font-medium text-green-700 mb-2 flex items-center">
-                    <Sparkles className="w-4 h-4 mr-1" />
-                    AI Response:
-                  </h3>
-                  <div 
-                    data-ai-response="true"
-                    data-node-id={node.id}
-                    className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate cursor-text"
-                  >
-                    {aiAnswer}
-                  </div>
-                </div>
-              )}
             </motion.div>
           ) : (
             // Collapsed preview
@@ -217,7 +212,39 @@ export default function CanvasNode({
               <div className="text-sm leading-relaxed text-gray-800 select-none">
                 {node.content.length > 100 ? `${node.content.substring(0, 100)}...` : node.content}
               </div>
-              {aiAnswer && <div className="mt-2 text-xs text-green-700">+ AI Response available (expand to view)</div>}
+            </div>
+          )}
+
+          {/* AI Response Section - Always visible header */}
+          {aiAnswer && (
+            <div className="border-t pt-4 mb-3" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                className="w-full text-sm font-medium text-green-700 mb-2 flex items-center justify-between hover:bg-green-50/50 rounded p-1 -m-1 transition-colors text-left"
+                onClick={() => setIsExpanded(!isExpanded)}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-expanded={isExpanded}
+                aria-controls={`ai-response-${node.id}`}
+                title={isExpanded ? "Collapse AI Response" : "Expand AI Response"}
+              >
+                <div className="flex items-center">
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  AI Response:
+                  {!isExpanded && <span className="ml-2 text-xs font-normal text-green-600">(expand to view)</span>}
+                </div>
+                <span className="text-green-600 text-2xl leading-none">
+                  {isExpanded ? '▴' : '▾'}
+                </span>
+              </button>
+              {isExpanded && (
+                <div 
+                  id={`ai-response-${node.id}`}
+                  data-ai-response="true"
+                  data-node-id={node.id}
+                  className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200 isolate cursor-text"
+                >
+                  {aiAnswer}
+                </div>
+              )}
             </div>
           )}
 
