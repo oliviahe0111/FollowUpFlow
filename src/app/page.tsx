@@ -12,6 +12,7 @@ import CanvasNode from '@/components/canvas/CanvasNode';
 import CanvasControls from '@/components/canvas/CanvasControls';
 import StartModal from '@/components/canvas/StartModal';
 import BoardList from '@/components/BoardList';
+import AuthStatusBadge from '@/components/AuthStatusBadge';
 import { useAnswerTextSelection } from '@/hooks/useAnswerTextSelection';
 import { TextSelectionChip } from '@/components/canvas/TextSelectionChip';
 import TextSelectionPopup from '@/components/canvas/TextSelectionPopup';
@@ -748,7 +749,7 @@ export default function BrainstormPage() {
               <p className="text-xs text-gray-500">{nodes.length} ideas • Infinite Canvas</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Button
               variant="outline"
               onClick={() => {
@@ -772,6 +773,9 @@ export default function BrainstormPage() {
             >
               New Board
             </Button>
+            <div className="ml-3 pl-3 border-l border-gray-300">
+              <AuthStatusBadge />
+            </div>
           </div>
         </div>
       </motion.header>

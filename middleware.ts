@@ -57,8 +57,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - auth/callback (OAuth callback)
+     * - auth/signout (signout route)
      * - auth/auth-code-error (error page)
      */
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/auth-code-error).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/signout|auth/auth-code-error).*)',
   ],
 }
