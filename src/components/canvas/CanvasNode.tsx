@@ -189,31 +189,13 @@ export default function CanvasNode({
             </div>
           </div>
 
-          {/* Body */}
-          {isExpanded ? (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex-1 min-h-0 mb-3 space-y-4"
-            >
-              {/* Question Content */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Question:</h3>
-                <div className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">
-                  {node.content}
-                </div>
-              </div>
-            </motion.div>
-          ) : (
-            // Collapsed preview
-            <div className="flex-shrink-0 mb-3">
-              <div className="text-sm leading-relaxed text-gray-800 select-none">
-                {node.content.length > 100 ? `${node.content.substring(0, 100)}...` : node.content}
-              </div>
+          {/* Question Content - Always visible */}
+          <div className="flex-shrink-0 mb-3">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Question:</h3>
+            <div className="text-sm leading-relaxed text-gray-800 whitespace-pre-line">
+              {node.content}
             </div>
-          )}
+          </div>
 
           {/* AI Response Section - Always visible header */}
           {aiAnswer && (
