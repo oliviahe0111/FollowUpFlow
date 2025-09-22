@@ -92,6 +92,20 @@ export interface UpdateNodeRequest {
   height?: number;
 }
 
+export interface LLMRequest {
+  prompt: string;
+}
+
+export interface LLMResponse {
+  response: string;
+  model?: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 // Utility types for transformations
 export interface CamelCaseNode {
   id: string;

@@ -233,6 +233,15 @@ export default function BrainstormPage() {
         add_context_from_internet: false
       });
 
+      // Parse AI response with fallback and guard
+      // Handle both string response and object response
+      const aiText = typeof response === 'string' ? response : (response?.content || response?.response || '');
+      if (!aiText || typeof aiText !== 'string') {
+        console.error('Empty or invalid AI response:', response);
+        setError('Failed to generate AI response. Please try again.');
+        return;
+      }
+
       const responseType = currentNodes.find(n => n.id === parentNodeId)?.type === 'root_question' ? 'ai_answer' : 'followup_answer';
 
       const { x, y } = calculateNewNodePosition(parentNodeId, currentNodes);
@@ -240,13 +249,13 @@ export default function BrainstormPage() {
       const responseNode = await retryWithBackoff(() => Node.create({
         board_id: boardId,
         type: responseType,
-        content: response,
+        content: aiText,
         root_id: rootId,
         parent_id: parentNodeId,
         x,
         y,
         width: 320,
-        height: Math.max(160, Math.min(240, response.length / 4))
+        height: Math.max(160, Math.min(240, aiText.length / 4))
       }));
 
       const newEdge = await retryWithBackoff(() => Edge.create({

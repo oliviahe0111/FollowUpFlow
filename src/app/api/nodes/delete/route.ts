@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isValidId } from '@/types/domain';
-import { authenticateAppRouterRequest } from '../../../_auth';
+import { authenticateAppRouterRequest } from '../../_auth';
 import { 
   createErrorResponse, 
   createSuccessResponse,
+  parseJsonBody,
   handleCORS 
-} from '../../../_utils';
+} from '../../_utils';
 
 export const runtime = 'nodejs';
 
@@ -14,17 +15,8 @@ export async function OPTIONS() {
   return handleCORS();
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const nodeId = params.id;
-  
-  console.log(`[API] POST /api/nodes/${nodeId}/delete`);
-
-  if (!nodeId || !isValidId(nodeId)) {
-    return createErrorResponse(400, 'Valid node id parameter is required', 'missing_node_id');
-  }
+export async function POST(request: NextRequest) {
+  console.log(`[API] POST /api/nodes/delete`);
 
   try {
     // Authenticate user
@@ -32,6 +24,24 @@ export async function POST(
     if (!user) {
       return createErrorResponse(401, 'Authentication required', 'unauthenticated');
     }
+
+    // Parse and validate request body
+    let body: { nodeId: string };
+    try {
+      body = await parseJsonBody(request);
+    } catch (error) {
+      return createErrorResponse(400, 'Invalid JSON in request body', 'invalid_json');
+    }
+    
+    if (!body.nodeId) {
+      return createErrorResponse(400, 'Node ID is required', 'missing_node_id');
+    }
+
+    if (!isValidId(body.nodeId)) {
+      return createErrorResponse(400, 'Invalid node id format', 'invalid_node_id');
+    }
+
+    const nodeId = body.nodeId;
 
     // First check if node exists and get its board
     const existingNode = await prisma.node.findUnique({
@@ -69,7 +79,7 @@ export async function POST(
     });
 
     console.log(`[API] Deleted node ${nodeId} and related edges`);
-    return createSuccessResponse({ deleted: true });
+    return createSuccessResponse({ ok: true, deleted: true });
 
   } catch (error: unknown) {
     console.error('[API] node DELETE error:', error);
