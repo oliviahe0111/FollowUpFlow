@@ -1,11 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { 
-  Board, 
   CreateBoardRequest,
-  boardToDTO,
-  ApiSuccessResponse,
-  ApiErrorResponse
+  boardToDTO
 } from '@/types/domain';
 import { authenticateAppRouterRequest } from '../_auth';
 import { 
@@ -25,8 +22,8 @@ export async function GET(request: NextRequest) {
   console.log(`[API] GET /api/boards`);
 
   try {
-    // Authenticate user
-    const { user, error: authError } = await authenticateAppRouterRequest(request);
+    // Authenticate user and get cookies to set
+    const { user, error: authError, cookiesToSet } = await authenticateAppRouterRequest(request);
     if (!user) {
       console.log('[API] Authentication failed:', authError);
       return createErrorResponse(401, 'Authentication required', 'unauthenticated');
@@ -41,8 +38,20 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     });
 
-    console.log(`[API] Found ${boards.length} boards for user ${user.id}`);
-    return createSuccessResponse(boards.map(boardToDTO));
+    console.log(`[API] Found ${boards.length} boards for user:`, { userId: user.id });
+
+    // Create response with preserved cookies
+    const successData = { data: boards.map(boardToDTO) };
+    const response = NextResponse.json(successData);
+    
+    // Set all cookies that were collected during authentication
+    if (cookiesToSet) {
+      cookiesToSet.forEach(cookie => {
+        response.cookies.set(cookie.name, cookie.value, cookie.options);
+      });
+    }
+    
+    return response;
 
   } catch (error: unknown) {
     console.error('[API] boards GET error:', error);
@@ -55,9 +64,10 @@ export async function POST(request: NextRequest) {
   console.log(`[API] POST /api/boards`);
 
   try {
-    // Authenticate user
-    const { user } = await authenticateAppRouterRequest(request);
+    // Authenticate user and get cookies to set
+    const { user, error: authError, cookiesToSet } = await authenticateAppRouterRequest(request);
     if (!user) {
+      console.log('[API] Authentication failed:', authError);
       return createErrorResponse(401, 'Authentication required', 'unauthenticated');
     }
 
@@ -84,7 +94,18 @@ export async function POST(request: NextRequest) {
     });
 
     console.log(`[API] Created board ${board.id} for user ${user.id}`);
-    return createSuccessResponse(boardToDTO(board), 201);
+    
+    // Create success response and set cookies
+    const response = createSuccessResponse(boardToDTO(board), 201);
+    
+    // Set all cookies that were collected during authentication
+    if (cookiesToSet) {
+      cookiesToSet.forEach(cookie => {
+        response.cookies.set(cookie.name, cookie.value, cookie.options);
+      });
+    }
+    
+    return response;
 
   } catch (error: unknown) {
     console.error('[API] boards POST error:', error);

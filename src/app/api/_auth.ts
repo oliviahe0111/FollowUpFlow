@@ -3,8 +3,18 @@
  * Bridges existing auth system with new Request/Response format
  */
 import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
+
+interface CookieOptions {
+  domain?: string;
+  expires?: Date | number;
+  httpOnly?: boolean;
+  maxAge?: number;
+  path?: string;
+  priority?: 'low' | 'medium' | 'high';
+  sameSite?: boolean | 'lax' | 'strict' | 'none';
+  secure?: boolean;
+}
 
 export interface AuthResult {
   user: {
@@ -12,27 +22,27 @@ export interface AuthResult {
     email: string;
   } | null;
   error?: string;
+  cookiesToSet?: Array<{ name: string; value: string; options?: CookieOptions }>;
 }
 
 /**
- * Authenticate App Router request using Supabase
+ * Authenticate App Router request using Supabase with proper cookie handling
  */
 export async function authenticateAppRouterRequest(request: NextRequest): Promise<AuthResult> {
   try {
-    const cookieStore = await cookies();
-    
+    const cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }> = [];
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll();
+            return request.cookies.getAll();
           },
-          setAll(cookiesToSet) {
-            // App Router handles cookie setting differently
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+          setAll(cookieArray) {
+            cookieArray.forEach((cookie) => {
+              cookiesToSet.push(cookie);
             });
           },
         },
@@ -45,11 +55,9 @@ export async function authenticateAppRouterRequest(request: NextRequest): Promis
       console.log('[AUTH] Authentication failed:', {
         error: error?.message,
         hasUser: !!user,
-        userAgent: request.headers.get('user-agent'),
-        origin: request.headers.get('origin'),
-        referer: request.headers.get('referer')
+        url: request.url
       });
-      return { user: null, error: error?.message || 'Unauthenticated' };
+      return { user: null, error: error?.message || 'Unauthenticated', cookiesToSet };
     }
 
     console.log('[AUTH] Authentication successful:', {
@@ -62,6 +70,7 @@ export async function authenticateAppRouterRequest(request: NextRequest): Promis
         id: user.id,
         email: user.email || '',
       },
+      cookiesToSet
     };
   } catch (error) {
     console.error('[AUTH] Authentication exception:', error);

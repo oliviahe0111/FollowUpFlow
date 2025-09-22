@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  LLMRequest,
-  LLMResponse
+  LLMRequest
 } from '@/types/domain';
 import { authenticateAppRouterRequest } from '../_auth';
 import { 
   createErrorResponse, 
-  createSuccessResponse, 
   parseJsonBody,
   handleCORS 
 } from '../_utils';

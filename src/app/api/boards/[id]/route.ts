@@ -1,8 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { 
-  ApiSuccessResponse, 
-  ApiErrorResponse,
   isValidId
 } from '@/types/domain';
 import { authenticateAppRouterRequest } from '../../_auth';
