@@ -31,10 +31,9 @@ export async function GET(request: NextRequest) {
 
     // Fetch boards owned by the user
     const boards = await prisma.board.findMany({
-      where: { 
-        ownerId: user.id 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
+      where: {
+        ownerId: user.id
+      },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -75,7 +74,7 @@ export async function POST(request: NextRequest) {
     let body: CreateBoardRequest;
     try {
       body = await parseJsonBody(request);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'Invalid JSON in request body', 'invalid_json');
     }
     
@@ -89,8 +88,7 @@ export async function POST(request: NextRequest) {
         title: body.title.trim(),
         description: body.description?.trim() || null,
         ownerId: user.id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
+      },
     });
 
     console.log(`[API] Created board ${board.id} for user ${user.id}`);

@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/'
 
   if (code) {
-    // eslint-disable-next-line prefer-const
-    let response = NextResponse.redirect(getURL() + next.slice(1))
+    // Fix URL construction to handle root path correctly
+    const redirectPath = next === '/' ? '' : (next.startsWith('/') ? next.slice(1) : next)
+    const response = NextResponse.redirect(getURL() + redirectPath)
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,9 +33,12 @@ export async function GET(request: NextRequest) {
     )
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
-    
+
     if (!error) {
+      console.log('[AUTH] Callback success, redirecting to:', getURL() + redirectPath)
       return response
+    } else {
+      console.error('[AUTH] Callback error:', error)
     }
   }
 

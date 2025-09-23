@@ -88,7 +88,7 @@ export async function PUT(
     let body: { title?: string; description?: string };
     try {
       body = await request.json();
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'Invalid JSON in request body', 'invalid_json');
     }
 

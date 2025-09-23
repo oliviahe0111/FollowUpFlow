@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     let body: CreateEdgeRequest;
     try {
       body = await parseJsonBody(request);
-    } catch (error) {
+    } catch {
       return createErrorResponse(400, 'Invalid JSON in request body', 'invalid_json');
     }
     
